@@ -1,2 +1,18 @@
-new stuff
-tst
+                                VeriExodus
+=============================================================================
+
+HSA part:
+
+0. Run configure.sh.
+
+1. Run generate_cisco_router_tf.sh, it will call generate_stanford_backbond_tf.py 
+   which wll takes in cisco configuration files for standford backbond under 
+   directory 
+
+      hsa/examples/stanford/Stanford_backbone
+
+   and all generated translate functions could be found in 
+
+      hsa/examples/stanford/tf_stanford_backbone
+      
+2. One can establish a project by loading all files from hsa/ directory.
