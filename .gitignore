@@ -3,4 +3,10 @@
 *.dvi
 *.log
 *.aux
-
+*.pyc
+*.swo
+*.swp
+*.tf
+*.json
+.project
+.pydevproject
