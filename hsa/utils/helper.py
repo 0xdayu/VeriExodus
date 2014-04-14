@@ -11,31 +11,34 @@ Created on Jun 1, 2011
 
 import re
 from math import pow
-from headerspace.hs import *
 from headerspace.tf import TF
+from utils.wildcard import wildcard_and, wildcard_not, wildcard_or, wildcard_copy, wildcard_intersect
 
-def is_ip_address(str):
-    ips = re.match('(?:[\d]{1,3})\.(?:[\d]{1,3})\.(?:[\d]{1,3})\.(?:[\d]{1,3})', str)
+def is_mac_address(s):
+    return not (re.match('(\w{2}:){5}\w{2}', s) == None)
+
+def is_ip_address(s):
+    ips = re.match('(?:[\d]{1,3})\.(?:[\d]{1,3})\.(?:[\d]{1,3})\.(?:[\d]{1,3})', s)
     if ips == None:
         return False
     else:
         return True
 
-def is_ip_subnet(str):
-    ips = re.match('(?:[\d]{1,3})\.(?:[\d]{1,3})\.(?:[\d]{1,3})\.(?:[\d]{1,3})/(?:[\d]{1,2})', str)
+def is_ip_subnet(s):
+    ips = re.match('(?:[\d]{1,3})\.(?:[\d]{1,3})\.(?:[\d]{1,3})\.(?:[\d]{1,3})/(?:[\d]{1,2})', s)
     if ips == None:
         return False
     else:
         return True
 
-def int_to_dotted_ip( intip ):
+def int_to_dotted_ip(intip):
     octet = ''
-    for exp in [3,2,1,0]:
-        octet = octet + str(intip / ( 256 ** exp )) + "."
-        intip = intip % ( 256 ** exp )
+    for exp in [3, 2, 1, 0]:
+        octet = octet + str(intip / (256 ** exp)) + "."
+        intip = intip % (256 ** exp)
     return(octet.rstrip('.'))
 
-def dotted_ip_to_int( dotted_ip ):
+def dotted_ip_to_int(dotted_ip):
     exp = 3
     intip = 0
     for quad in dotted_ip.split('.'):
@@ -43,7 +46,7 @@ def dotted_ip_to_int( dotted_ip ):
         exp = exp - 1
     return(intip)
 
-def dotted_subnet_to_int( dotted_subnet ):
+def dotted_subnet_to_int(dotted_subnet):
     exp = 3
     intip = 0
     subnet = 32
@@ -57,10 +60,10 @@ def dotted_subnet_to_int( dotted_subnet ):
     for quad in dotted_ip.split('.'):
         intip = intip + (int(quad) * (256 ** exp))
         exp = exp - 1
-    return([intip,subnet])
+    return([intip, subnet])
 
 def mac_to_int(mac):
-    return int(mac.replace(':', ''),16)
+    return int(mac.replace(':', ''), 16)
 
 def l2_proto_to_int(proto):
     if proto == "ip":
@@ -70,15 +73,15 @@ def l2_proto_to_int(proto):
     elif proto == "mpls":
         return 0x8847
 
-def range_to_wildcard(r_s,r_e,length):
+def range_to_wildcard(r_s, r_e, length):
     vals = r_s
     vale = r_e
     match = []
     while (vals <= vale):
-        for i in range(1,length+2):
-            if not ((vals | (2**i - 1 )) <= vale and (vals % 2**i)==0) :
-                match.append((vals,i-1))
-                vals = (vals| (2**(i-1) - 1 )) + 1
+        for i in range(1, length + 2):
+            if not ((vals | (2 ** i - 1)) <= vale and (vals % 2 ** i) == 0) :
+                match.append((vals, i - 1))
+                vals = (vals | (2 ** (i - 1) - 1)) + 1
                 break
     return match
 
@@ -100,7 +103,7 @@ def find_num_mask_bits_left_mak(mask):
             count += 1
         else:
             break
-    return 32-count
+    return 32 - count
 
 class node(object):
     def __init__(self):
@@ -113,22 +116,22 @@ class node(object):
         ind = ""
         for i in range(indent):
             ind = ind + "\t";
-        str_ip = "%sIPs: "%ind
+        str_ip = "%sIPs: " % ind
         for i in self.ips:
-            str_ip = str_ip + int_to_dotted_ip(i[0]) + "/%d"%i[1] + ", "
+            str_ip = str_ip + int_to_dotted_ip(i[0]) + "/%d" % i[1] + ", "
         print str_ip
-        print "%sAction: %s"%(ind,self.action)
+        print "%sAction: %s" % (ind, self.action)
         if self.zero != None:
-            print "%sZero:"%(ind)
-            self.zero.printSelf(indent+1)
+            print "%sZero:" % (ind)
+            self.zero.printSelf(indent + 1)
         if self.one != None:
-            print "%sOne:"%(ind)
-            self.one.printSelf(indent+1)
+            print "%sOne:" % (ind)
+            self.one.printSelf(indent + 1)
 
     def is_leaf(self):
         return (self.zero == None and self.one == None)
 
-    def optimize(self,action):
+    def optimize(self, action):
         propagate_action = action
         if (self.action != None):
             propagate_action = self.action
@@ -167,11 +170,11 @@ class node(object):
 
     def output_compressed(self, power, cip, result):
         if (self.zero != None):
-            self.zero.output_compressed(power-1, cip, result)
+            self.zero.output_compressed(power - 1, cip, result)
         if (self.one != None):
-            self.one.output_compressed(power-1, int(cip + pow(2,power-1)), result)
+            self.one.output_compressed(power - 1, int(cip + pow(2, power - 1)), result)
         if len(self.ips) > 0:
-            result.append((cip,32-power,self.action,self.ips))
+            result.append((cip, 32 - power, self.action, self.ips))
 
 
 def compress_ip_list(ip_list):
@@ -187,7 +190,7 @@ def compress_ip_list(ip_list):
     # create the tri
     for elem in ip_list:
         cur = root
-        for i in range(31,31-elem[1],-1):
+        for i in range(31, 31 - elem[1], -1):
             next_bit = (elem[0] >> i) & 0x1
             if (next_bit == 0):
                 if (cur.zero == None):
@@ -202,22 +205,22 @@ def compress_ip_list(ip_list):
             cur.action = elem[2]
 
     # optimize the tri
-    #root.printSelf(0)
+    # root.printSelf(0)
     root.optimize(None)
-    #root.printSelf(0)
+    # root.printSelf(0)
     result = []
     root.output_compressed(32, 0, result)
     return result
 
 
-def compose_standard_rules(rule1,rule2):
+def compose_standard_rules(rule1, rule2):
 
     mid_ports = [val for val in rule2["in_ports"] if val in rule1["out_ports"]]
     if len(mid_ports) == 0:
         return None
 
-    ### finding match
-    #rule 2 is a link rule
+    # ## finding match
+    # rule 2 is a link rule
     if rule2["match"] == None:
         match = wildcard_copy(rule1["match"])
     else:
@@ -227,17 +230,17 @@ def compose_standard_rules(rule1,rule2):
             if rule1["match"] == None:
                 match = wildcard_copy(rule2["match"])
             else:
-                match = wildcard_intersect(rule2["match"],rule1["match"])
+                match = wildcard_intersect(rule2["match"], rule1["match"])
         # if rule 1 is a rewrite rule
         else:
             match_inv = wildcard_or(\
-                wildcard_and(rule2["match"],rule1['mask']),\
+                wildcard_and(rule2["match"], rule1['mask']), \
                 rule1['inverse_rewrite'])
-            match = wildcard_intersect(match_inv,rule1["match"])
+            match = wildcard_intersect(match_inv, rule1["match"])
     if len(match) == 0:
         return None
 
-    ### finding mask and rewrite
+    # ## finding mask and rewrite
     mask = None
     rewrite = None
     if rule2["mask"] == None:
@@ -249,15 +252,15 @@ def compose_standard_rules(rule1,rule2):
     else:
         # mask = mask1 & mask2
         # rewrite = (rewrite1 & mask2) | (rewrite2 & !mask2)
-        mask = wildcard_and(rule1["mask"],rule2["mask"])
-        rewrite = wildcard_or(wildcard_and(rule1["rewrite"],rule2["mask"]),wildcard_and(rule2["rewrite"],wildcard_not(rule2["mask"])))
+        mask = wildcard_and(rule1["mask"], rule2["mask"])
+        rewrite = wildcard_or(wildcard_and(rule1["rewrite"], rule2["mask"]), wildcard_and(rule2["rewrite"], wildcard_not(rule2["mask"])))
     in_ports = rule1["in_ports"]
     out_ports = rule2["out_ports"]
 
     if rule1["file"] == rule2["file"]:
         file_name = rule1["file"]
     else:
-        file_name = "%s , %s"%(rule1["file"],rule2["file"])
+        file_name = "%s , %s" % (rule1["file"], rule2["file"])
 
     lines = rule1["line"]
     lines.extend(rule2["line"])
