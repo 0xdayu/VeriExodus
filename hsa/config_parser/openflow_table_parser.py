@@ -30,7 +30,7 @@ class OpenFlowSwitch(object):
             if nw_dst is not None:
                 assert is_ip_address(nw_dst) or is_ip_subnet(nw_dst)
             if in_port is not None:
-                assert isinstance(in_port, int)
+                assert isinstance(in_port, str)
             if tp_dst is not None:
                 assert isinstance(tp_dst, int) and tp_dst >= 0 and tp_dst < 65536
 
@@ -52,11 +52,11 @@ class OpenFlowSwitch(object):
         ACTION_TO_CTRL = "CONTROLLER"
 
     class ActionModification(Action):
-        def __init__(self, mod_enum, new_value):
-            assert mod_enum == self.ACTION_MOD_DL_DST or self.ACTION_MOD_DL_SRC
-            self.mod_enum = mod_enum
+        def __init__(self, act_enum, new_value):
+            assert act_enum == self.ACTION_MOD_DL_DST or self.ACTION_MOD_DL_SRC
+            self.act_enum = act_enum
 
-            if mod_enum == self.ACTION_MOD_DL_DST or mod_enum == self.ACTION_MOD_DL_SRC:
+            if act_enum == self.ACTION_MOD_DL_DST or act_enum == self.ACTION_MOD_DL_SRC:
                 assert is_mac_address(new_value)
             else:
                 raise ValueError("No ip address modification encountered so far!")
@@ -64,31 +64,32 @@ class OpenFlowSwitch(object):
             self.new_value = new_value
 
     class ActionDrop(Action):
-        def __init__(self, mod_enum):
-            assert mod_enum == self.ACTION_DROP
-            self.mod_enum = mod_enum
+        def __init__(self, act_enum):
+            assert act_enum == self.ACTION_DROP
+            self.act_enum = act_enum
 
     class ActionDataLinkFlood(Action):
-        def __init__(self, mod_enum):
-            assert mod_enum == self.ACTION_ALL
+        def __init__(self, act_enum):
+            assert act_enum == self.ACTION_ALL
+            self.act_enum = act_enum
 
     class ActionForward(Action):
-        def __init__(self, mod_enum, port_num):
-            assert mod_enum == self.ACTION_FORWARD
-            self.mod_enum = mod_enum
-            assert isinstance(port_num, int)
-            self.port_num = port_num
+        def __init__(self, act_enum, out_port):
+            assert act_enum == self.ACTION_FORWARD
+            self.act_enum = act_enum
+            assert isinstance(out_port, str)
+            self.out_port = out_port
 
     class ActionToController(Action):
-        def __init__(self, mod_enum, ctrl_port_num):
-            assert mod_enum == self.ACTION_TO_CTRL
-            self.mod_enum = mod_enum
-            assert isinstance(ctrl_port_num, int)
-            self.ctrl_port_num = ctrl_port_num
+        def __init__(self, act_enum, ctrl_out_port):
+            assert act_enum == self.ACTION_TO_CTRL
+            self.act_enum = act_enum
+            assert isinstance(ctrl_out_port, str)
+            self.ctrl_out_port = ctrl_out_port
 
-    def __init__(self, flr_id):
-        self.flr_id = flr_id
-        self.rows = []
+    def __init__(self, switch_id):
+        self.switch_id = switch_id
+        self.table_rows = []
 
 def read_openflow_tables(targets, file_path):
     def parse_actions(entry):
@@ -103,7 +104,7 @@ def read_openflow_tables(targets, file_path):
 
         for txt_action in entry.split(','):
             if txt_action.startswith(enum_act_to_ctrl):
-                ctrl_port = int(txt_action[len(enum_act_to_ctrl) + len(':') :])
+                ctrl_port = txt_action[len(enum_act_to_ctrl) + len(':') :]
                 act_list += [OpenFlowSwitch.ActionToController(enum_act_to_ctrl, ctrl_port)]
             elif txt_action.startswith(enum_act_drop):
                 act_list += [OpenFlowSwitch.ActionDrop(enum_act_drop)]
@@ -116,7 +117,7 @@ def read_openflow_tables(targets, file_path):
             elif txt_action.startswith(enum_act_flood):
                 act_list += [OpenFlowSwitch.ActionDataLinkFlood(enum_act_flood)]
             elif txt_action.startswith(enum_act_forward):
-                out_port = int(txt_action[len(enum_act_forward) + len(':') :])
+                out_port = txt_action[len(enum_act_forward) + len(':') :]
                 act_list += [OpenFlowSwitch.ActionForward(enum_act_forward, out_port)]
 
         return act_list
@@ -148,9 +149,9 @@ def read_openflow_tables(targets, file_path):
             elif txt_field.startswith(enum_mch_nw_dst):
                 nw_dst = txt_field[len(enum_mch_nw_dst) + len(':') :]
             elif txt_field.startswith(enum_mch_in_port):
-                in_port = int(txt_field[len(enum_mch_in_port) + len(':') :])
+                in_port = txt_field[len(enum_mch_in_port) + len(':') :]
             elif txt_field.startswith(enum_mch_tp_dst):
-                in_port = int(txt_field[len(enum_mch_tp_dst) + len(':') :])
+                tp_dst = int(txt_field[len(enum_mch_tp_dst) + len(':') :])
             else:
                 raise ValueError("Match field not considered: %s" % txt_field)
 
@@ -177,7 +178,7 @@ def read_openflow_tables(targets, file_path):
             txt_sections[sec_name] += [line]
 
     # construct open-flow table dictionary
-    switches = {}
+    h_switches = {}
     for rtr_name in txt_sections.keys():
         print "--- Parsing table %s" % rtr_name
         of_router = OpenFlowSwitch(rtr_name)
@@ -190,8 +191,8 @@ def read_openflow_tables(targets, file_path):
                     match_rule.addActions(parse_actions(entry[len(OpenFlowSwitch.PATTERN_ACTION) + len('=') :]))
                 elif entry.startswith(OpenFlowSwitch.PATTERN_PRIORITY):
                     match_rule = parse_match_rule(entry[len(OpenFlowSwitch.PATTERN_PRIORITY) + len('=') :])
-            of_router.rows += [match_rule]
+            of_router.table_rows += [match_rule]
 
-        switches[rtr_name] = of_router
+        h_switches[rtr_name] = of_router
 
-    return switches
+    return h_switches
