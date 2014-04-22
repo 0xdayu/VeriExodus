@@ -7,8 +7,33 @@ class RuleTreeNode:
         self.sw_id = sw_id
         self.is_forest_handle = is_forest_handle
 
-def generate_transfer_funcions():
-    pass
+def generate_transfer_funcions(forest_handle):
+    def backtrack(node, h_parents):
+        actionSequence = []
+        while node is not forest_handle:
+            actionSequence = node.rule.act_list + actionSequence
+            node = h_parents[node]
+        return actionSequence
+
+    def generate(action_sequence):
+        pass
+
+    allTfs = []
+    q = forest_handle.children[:]
+    hParents = {}
+    for root in forest_handle.children:
+        hParents[root] = forest_handle
+
+    while q:
+        c = q.pop(0)
+        if not c.children:
+            allTfs += generate(backtrack(c, hParents))
+        else:
+            for child in c.children:
+                hParents[child] = c
+                q.add(child)
+
+    return allTfs
 
 def topology_to_dict(topology):
     result = {}
