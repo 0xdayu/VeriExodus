@@ -15,6 +15,7 @@ from array import array
 from utils.wildcard_dictionary import *
 from utils.hs_hash_table import hs_hash_table
 import json
+import array
 
 class TF(object):
     '''
@@ -175,6 +176,102 @@ class TF(object):
 
         return strings
 
+    @staticmethod
+    def id_port_mapper(port):
+        return port
+    
+    @staticmethod
+    def bck_port_mapper(port):
+        return port + 1
+    
+    @staticmethod
+    def fwd_port_mapper(port):
+        return port - 1
+    
+    @staticmethod
+    def merge_tf(tf1, tf2, port_mapper):
+        rtf = TF(tf1.length)
+        
+        outports = r1["out_ports"]
+        inports = r2["in_ports"]
+        
+        for r1 in tf1.rules:
+            outport = set(map(port_mapper, r1["out_ports"]))
+            rewritten_match = rewrite_hsa(r1["match"], r1["mask"], r1["rewrite"])
+            
+            for r2 in tf2.rules:
+                inport = set(r2["in_ports"])
+
+                # TODO: fix in/out ports
+                if (len(outport.intersection(inport)) > 0 and \
+                        is_match(rewritten_match, r2["match"])):
+                    # r1 contains r2
+                        # add two rules, one drops?
+                    # r1 takes less than or equal r2
+                        # just merge
+                    # merge r1 and r2
+                    new_inports  = r1["in_ports"]
+                    new_match    = merge_match(r1["match"], r1["mask"], r1["rewrite"], r2["match"])
+                    new_outports = r2["out_ports"]
+                    new_mask     = merge_mask(r1["mask"], r2["mask"])
+                    new_rewrite  = merge_rewrite(r1["rewrite"], r2["mask"], r2["rewrite"])
+
+        return rtf
+
+    # rewrite first match to compare with second match
+    def rewrite_hsa(match, mask, rewrite):
+        result = " " * len(match)
+        
+        for i in len(match):
+            if (mask[i] == "0"):
+                result[i] = rewrite[i]
+            elif (mask[i] == "1"):
+                result[i] = match[i]
+
+        return result
+    
+    # returns subset match of outer matching on inner
+    def is_match(outer, inner):
+        for m1, m2 in zip(outer, inner):
+            if ((m1 == "0" and m2 == "1") or (m1 == "1" and m2 == "0")):
+                return False
+        
+        return True
+    
+    def merge_match(match1, mask1, rewrite1, match2):
+        result = " " * len(mask1)
+        for i in range(len(match1)):
+            if (mask1[i] == "0" or mask1[i] == "1"):
+                result[i] = mask1[i]
+            else:
+                if (rewrite[i] == "0"):
+                    result[i] = "x"
+                else:
+                    result[i] = match2[i]
+        
+        return result
+    
+    def merge_mask(mask1, mask2):
+        result = " " * len(mask1)
+        
+        for i in range(len(mask1)):
+            if (mask1[i] == "0" or mask2[i] == "0"):
+                result[i] = "0"
+            else:
+                result[i] = "1"
+        return result
+
+    def merge_rewrite(rw1, mask2, rw2):
+        result = " " * len(rw1)
+        
+        for i in range(len(rw1)):
+            if (mask2[i] != "0"):
+                result[i] = rw1[i]
+            else:
+                result[i] = rw2[i]
+        return result
+    
+    
     @staticmethod
     def create_custom_rule(match, transform, inv_match, inv_transform, \
                            file_name = None, lines = []):

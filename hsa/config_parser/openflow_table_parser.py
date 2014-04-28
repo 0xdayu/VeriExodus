@@ -1,4 +1,5 @@
 from utils.helper import is_mac_address, is_ip_address, is_ip_subnet
+from headerspace.tf import *
 
 class OpenFlowSwitch(object):
     PATTERN_PRIORITY = "priority"
@@ -156,7 +157,7 @@ def read_openflow_tables(targets, file_path):
                 raise ValueError("Match field not considered: %s" % txt_field)
 
         return OpenFlowSwitch.MatchRule(priority, protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst)
-
+        
     print "=== Reading OpenFlow Router table ==="
     f = open(file_path, 'r')
     firstline = f.readline()
@@ -196,3 +197,19 @@ def read_openflow_tables(targets, file_path):
         h_switches[rtr_name] = of_router
 
     return h_switches
+
+HS_LENGTH = 16
+def generate_transfer_function(switches):
+    cs = HS_LENGTH
+    L = cs.hs_format["length"]
+    TF = tf(L)
+    
+    for rtr_name in switches.keys():
+        router = switches[rtr_name]
+        # TODO: needs output ports
+        router_tf = TF.create_standard_rule(row.in_port, match, row.out_port,
+                                            None, None)
+        
+        for row in router.table_rows:
+            router_tf.add_fwd_rule(row)
+        
