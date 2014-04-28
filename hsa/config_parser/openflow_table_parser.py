@@ -4,6 +4,13 @@ from headerspace.tf import *
 class OpenFlowSwitch(object):
     PATTERN_PRIORITY = "priority"
     PATTERN_ACTION = "actions"
+    
+    ACTION_MOD_DL_SRC = "mod_dl_src"
+    ACTION_MOD_DL_DST = "mod_dl_dst"
+    ACTION_FORWARD = "output"
+    ACTION_ALL = "ALL"
+    ACTION_DROP = "drop"
+    ACTION_TO_CTRL = "CONTROLLER"
 
     class MatchRule(object):
         FIELD_IP = "ip"
@@ -45,12 +52,6 @@ class OpenFlowSwitch(object):
             self.act_list += actions
 
     class Action(object):
-        ACTION_MOD_DL_SRC = "mod_dl_src"
-        ACTION_MOD_DL_DST = "mod_dl_dst"
-        ACTION_FORWARD = "output"
-        ACTION_ALL = "ALL"
-        ACTION_DROP = "drop"
-        ACTION_TO_CTRL = "CONTROLLER"
 
     class ActionModification(Action):
         def __init__(self, act_enum, new_value):

@@ -100,20 +100,20 @@ def generate_rule_trees(pipeline, topology, h_switches):
 
     # a breadth-first-search routine that enumerate all possible rule paths
     level = 0
-    while q and level < len(pipeline) - 1:
-        p, q = q, []
+    while nextLevel and level < len(pipeline) - 1:
+        currLevel, nextLevel = nextLevel, []
         level += 1
         nxtSwitchId = pipeline[level]
 
-        while p:
-            node = p.pop(0)
+        while currLevel:
+            node = currLevel.pop(0)
             nxtTable = h_switches[nxtSwitchId]
             fwdActions = filter(lambda rule: isinstance(rule, OpenFlowSwitch.ActionForward), node.rule.act_list)
             for nxtRule in nxtTable.table_rows:
                 if match_rules(node.sw_id, fwdActions, nxtSwitchId, nxtRule, hTopo):
                     newRule = RuleTreeNode(nxtSwitchId, nxtRule)
                     node.children.append(newRule)
-                    q.append(newRule)
+                    nextLevel.append(newRule)
 
         preclude_incomplete_paths(forestHandle, level + 1)
 
@@ -153,5 +153,62 @@ f_in_pt = lambda n : str(2 * n - 1)
 f_out_pt = lambda n : str(2 * n)
 f_rtr_pt = lambda n : str(n + 1)
 num_of_subnets = 2
+"""
 topology = generate_topology(pipeline, num_of_subnets, f_in_pt, f_out_pt, f_rtr_pt)
-generate_rule_trees(pipeline, topology, h_switches)
+forest = generate_rule_trees(pipeline, topology, h_switches)
+"""
+
+HEADER_LENGTH = 16
+formatt = {}
+formatt["vlan_pos"] = 0
+formatt["ip_src_pos"] = 2
+formatt["ip_dst_pos"] = 6
+formatt["ip_proto_pos"] = 10
+formatt["transport_src_pos"] = 11
+formatt["transport_dst_pos"] = 13
+formatt["transport_ctrl_pos"] = 15
+formatt["vlan_len"] = 2
+formatt["ip_src_len"] = 4
+formatt["ip_dst_len"] = 4
+formatt["ip_proto_len"] = 1
+formatt["transport_src_len"] = 2
+formatt["transport_dst_len"] = 2
+formatt["transport_ctrl_len"] = 1
+formatt["length"] = 16
+return formatt
+
+
+# TODO: convert h_switches to tfs
+for switch in h_switches:
+    tf = TF(HEADER_LENGTH)
+    
+    # TODO: convert match rules
+    for rule in self.table_rows:
+        outports = list()
+        mask = wildcard_create_bit_repeat(HEADER_LENGTH, 0x2)
+        rewrite = wildcard_create_bit_repeat(HEADER_LENGTH, 0x1)
+        
+        for action in rule.act_list:
+            # get out-ports
+            if (action.act_enum == Action.ACTION_FORWARD):
+                outports.append(action.out_port)
+            
+            # get mask/rewrite
+            if (action.act_name == Action.ACTION_MOD_DL_SRC):
+                set_header_field(formatt, mask, "ip_src", value, 0)
+                set_header_field(formatt, rewrite, "ip_src", value, 0)
+            if (action.act_name == Action.ACTION_MOD_DL_DST):
+                set_header_field(formatt, mask, "ip_dst", value, 0)
+                set_header_field(formatt, rewrite, "ip_dst", value, 0)
+        
+        inports  = rule.in_ports
+        match    = rule.match
+        mask     = rule.mask
+        rewrite  = rule.rewrite
+        
+        converted_rule = TF.create_custom_rule(inports, match, outports, mask, rewrite)
+        tf.add_custom_rule(converted_rule)
+        
+# TODO: merged based on pipeline
+pipeline
+
