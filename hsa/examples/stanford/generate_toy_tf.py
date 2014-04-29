@@ -1,4 +1,5 @@
 from config_parser.openflow_table_parser import read_openflow_tables, OpenFlowSwitch
+from utils.helper import *
 
 class RuleTreeNode:
     def __init__(self, sw_id, rule, is_forest_handle=False):
@@ -175,7 +176,6 @@ formatt["transport_src_len"] = 2
 formatt["transport_dst_len"] = 2
 formatt["transport_ctrl_len"] = 1
 formatt["length"] = 16
-return formatt
 
 
 # TODO: convert h_switches to tfs
@@ -185,22 +185,34 @@ for switch in h_switches:
     # TODO: convert match rules
     for rule in self.table_rows:
         outports = list()
-        mask = wildcard_create_bit_repeat(HEADER_LENGTH, 0x2)
+        match   = wildcard_create_bit_repeat(HEADER_LENGTH, 0x3)
+        mask    = wildcard_create_bit_repeat(HEADER_LENGTH, 0x2)
         rewrite = wildcard_create_bit_repeat(HEADER_LENGTH, 0x1)
         
+        # create "match" by piecing together requirements
+        fields = ["in_port", "dl_src", "dl_dst", "nw_src", "nw_dst", "tp_dst"]
+        for f in fields:
+            fieldName = fields[f]
+            val = getattr(rule, fieldName)
+            if val is not None:
+                # this field has non-wildcard bits
+                set_header_field(formatt, match, fieldName, val, 0)
+            
         for action in rule.act_list:
             # get out-ports
             if (action.act_enum == Action.ACTION_FORWARD):
                 outports.append(action.out_port)
-            
+
             # get mask/rewrite
             if (action.act_name == Action.ACTION_MOD_DL_SRC):
-                set_header_field(formatt, mask, "ip_src", value, 0)
-                set_header_field(formatt, rewrite, "ip_src", value, 0)
+                # 4th parameter is int
+                set_header_field(formatt, mask, "ip_src", 0, 0)
+                set_header_field(formatt, rewrite, "ip_src", dotted_ip_to_int(action.ip_src), 0)
             if (action.act_name == Action.ACTION_MOD_DL_DST):
-                set_header_field(formatt, mask, "ip_dst", value, 0)
-                set_header_field(formatt, rewrite, "ip_dst", value, 0)
-        
+                set_header_field(formatt, mask, "ip_dst", 0, 0)
+                set_header_field(formatt, rewrite, "ip_dst", dotted_ip_to_int(action.ip_dst), 0)
+
+        # list of ints and 3 wildcards
         inports  = rule.in_ports
         match    = rule.match
         mask     = rule.mask
@@ -210,5 +222,5 @@ for switch in h_switches:
         tf.add_custom_rule(converted_rule)
         
 # TODO: merged based on pipeline
-pipeline
+
 

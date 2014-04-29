@@ -52,7 +52,8 @@ class OpenFlowSwitch(object):
             self.act_list += actions
 
     class Action(object):
-
+        pass
+    
     class ActionModification(Action):
         def __init__(self, act_enum, new_value):
             assert act_enum == self.ACTION_MOD_DL_DST or self.ACTION_MOD_DL_SRC
@@ -199,7 +200,7 @@ def read_openflow_tables(targets, file_path):
 
     return h_switches
 
-HS_LENGTH = 16
+"""HS_LENGTH = 16
 def generate_transfer_function(switches):
     cs = HS_LENGTH
     L = cs.hs_format["length"]
@@ -213,4 +214,5 @@ def generate_transfer_function(switches):
         
         for row in router.table_rows:
             router_tf.add_fwd_rule(row)
-        
+
+    """
