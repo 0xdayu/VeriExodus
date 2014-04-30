@@ -1,21 +1,12 @@
 from utils.helper import is_mac_address, is_ip_address, is_ip_subnet
 from headerspace.tf import *
+from config_parser.cisco_router_parser import *
 
 class OpenFlowSwitch(object):
     PATTERN_PRIORITY = "priority"
     PATTERN_ACTION = "actions"
     
-    ACTION_MOD_DL_SRC = "mod_dl_src"
-    ACTION_MOD_DL_DST = "mod_dl_dst"
-    ACTION_FORWARD = "output"
-    ACTION_ALL = "ALL"
-    ACTION_DROP = "drop"
-    ACTION_TO_CTRL = "CONTROLLER"
-
     class MatchRule(object):
-        FIELD_IP = "ip"
-        FIELD_ARP = "arp"
-        FIELD_TCP = "tcp"
         FIELD_IN_PORT = "in_port"
         FIELD_DL_SRC = "dl_src"
         FIELD_DL_DST = "dl_dst"
@@ -26,9 +17,10 @@ class OpenFlowSwitch(object):
         def __init__(self, priority, protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst):
             assert isinstance(priority, int)
             self.protocol = protocol
+            #self.protocol = cisco_router_parser.get_protocol_number(protocol)
             self.priority = priority
-            if protocol is not None:
-                assert protocol == self.FIELD_IP or protocol == self.FIELD_ARP or protocol == self.FIELD_TCP
+            #if protocol is not None:
+            #    assert protocol == self.FIELD_IP or protocol == self.FIELD_ARP or protocol == self.FIELD_TCP
             if dl_src is not None:
                 assert is_mac_address(dl_src)
             if dl_dst is not None:
@@ -52,6 +44,13 @@ class OpenFlowSwitch(object):
             self.act_list += actions
 
     class Action(object):
+	ACTION_MOD_DL_SRC = "mod_dl_src"
+	ACTION_MOD_DL_DST = "mod_dl_dst"
+	ACTION_FORWARD = "output"
+	ACTION_ALL = "ALL"
+	ACTION_DROP = "drop"
+	ACTION_TO_CTRL = "CONTROLLER"
+
         pass
     
     class ActionModification(Action):
@@ -130,9 +129,12 @@ def read_openflow_tables(targets, file_path):
         priority = int(fields[0])
         protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst = None, None, None, None, None, None, None
 
-        enum_mch_ip = OpenFlowSwitch.MatchRule.FIELD_IP
+        """enum_mch_ip = OpenFlowSwitch.MatchRule.FIELD_IP
         enum_mch_arp = OpenFlowSwitch.MatchRule.FIELD_ARP
-        enum_mch_tcp = OpenFlowSwitch.MatchRule.FIELD_TCP
+        enum_mch_tcp = OpenFlowSwitch.MatchRule.FIELD_TCP"""
+        enum_mch_ip = "ip"
+        enum_mch_arp = "arp"
+        enum_mch_tcp = "tcp"
         enum_mch_in_port = OpenFlowSwitch.MatchRule.FIELD_IN_PORT
         enum_mch_dl_src = OpenFlowSwitch.MatchRule.FIELD_DL_SRC
         enum_mch_dl_dst = OpenFlowSwitch.MatchRule.FIELD_DL_DST
@@ -143,6 +145,9 @@ def read_openflow_tables(targets, file_path):
         for txt_field in fields[1 :]:
             if txt_field ==  enum_mch_ip or txt_field == enum_mch_arp or txt_field == enum_mch_tcp:
                 protocol = txt_field
+            #cisco_router_parser.get_protocol_number(txt_field)
+            #if 
+            #    protocol
             elif txt_field.startswith(enum_mch_dl_src):
                 dl_src = txt_field[len(enum_mch_dl_src) + len(':') :]
             elif txt_field.startswith(enum_mch_dl_dst):
@@ -200,19 +205,4 @@ def read_openflow_tables(targets, file_path):
 
     return h_switches
 
-"""HS_LENGTH = 16
-def generate_transfer_function(switches):
-    cs = HS_LENGTH
-    L = cs.hs_format["length"]
-    TF = tf(L)
-    
-    for rtr_name in switches.keys():
-        router = switches[rtr_name]
-        # TODO: needs output ports
-        router_tf = TF.create_standard_rule(row.in_port, match, row.out_port,
-                                            None, None)
-        
-        for row in router.table_rows:
-            router_tf.add_fwd_rule(row)
 
-    """

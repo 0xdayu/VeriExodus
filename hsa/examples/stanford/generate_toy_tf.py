@@ -1,5 +1,7 @@
 from config_parser.openflow_table_parser import read_openflow_tables, OpenFlowSwitch
 from utils.helper import *
+from utils.wildcard import *
+from utils.wildcard_utils import *
 
 class RuleTreeNode:
     def __init__(self, sw_id, rule, is_forest_handle=False):
@@ -159,7 +161,6 @@ topology = generate_topology(pipeline, num_of_subnets, f_in_pt, f_out_pt, f_rtr_
 forest = generate_rule_trees(pipeline, topology, h_switches)
 """
 
-HEADER_LENGTH = 16
 formatt = {}
 formatt["vlan_pos"] = 0
 formatt["ip_src_pos"] = 2
@@ -168,6 +169,8 @@ formatt["ip_proto_pos"] = 10
 formatt["transport_src_pos"] = 11
 formatt["transport_dst_pos"] = 13
 formatt["transport_ctrl_pos"] = 15
+formatt["dl_src_pos"] = 16
+formatt["dl_dst_pos"] = 22
 formatt["vlan_len"] = 2
 formatt["ip_src_len"] = 4
 formatt["ip_dst_len"] = 4
@@ -175,52 +178,76 @@ formatt["ip_proto_len"] = 1
 formatt["transport_src_len"] = 2
 formatt["transport_dst_len"] = 2
 formatt["transport_ctrl_len"] = 1
-formatt["length"] = 16
+formatt["dl_src_len"] = 6
+formatt["dl_dst_len"] = 6
+formatt["length"] = 28
 
+switch_tfs = dict()
 
-# TODO: convert h_switches to tfs
-for switch in h_switches:
-    tf = TF(HEADER_LENGTH)
+# convert h_switches to tfs
+for switch_name in h_switches:
+    switch = h_switches[switch_name]
+    tf = TF(formatt["length"])
     
-    # TODO: convert match rules
-    for rule in self.table_rows:
+    print "================= ", switch_name, len(switch.table_rows), " ================="
+    # convert match rules
+    for rule in switch.table_rows:
         outports = list()
-        match   = wildcard_create_bit_repeat(HEADER_LENGTH, 0x3)
-        mask    = wildcard_create_bit_repeat(HEADER_LENGTH, 0x2)
-        rewrite = wildcard_create_bit_repeat(HEADER_LENGTH, 0x1)
+        match   = wildcard_create_bit_repeat(formatt["length"], 0x3)
+        mask    = wildcard_create_bit_repeat(formatt["length"], 0x2)
+        rewrite = wildcard_create_bit_repeat(formatt["length"], 0x1)
         
         # create "match" by piecing together requirements
-        fields = ["in_port", "dl_src", "dl_dst", "nw_src", "nw_dst", "tp_dst"]
-        for f in fields:
-            fieldName = fields[f]
-            val = getattr(rule, fieldName)
+        # "dl_src", "dl_dst", 
+        fields = {"nw_src": "ip_src", "nw_dst": "ip_dst", "tp_dst": "transport_dst"}
+        for pktFieldName, hsaFieldName in fields.iteritems():
+            val = getattr(rule, pktFieldName)
             if val is not None:
                 # this field has non-wildcard bits
-                set_header_field(formatt, match, fieldName, val, 0)
+                if (isinstance(val, str) and is_ip_subnet(val)):
+                    [intIp, intSubnet] = dotted_subnet_to_int(val)
+                    set_header_field(formatt, match, hsaFieldName, intIp, 32 - intSubnet)
+                elif (isinstance(val, str) and is_ip_address(val)):
+                    intIp = dotted_ip_to_int(val)
+                    set_header_field(formatt, match, hsaFieldName, intIp, 0)
+                else:
+                    # port
+                    set_header_field(formatt, match, hsaFieldName, val, 0)
             
         for action in rule.act_list:
             # get out-ports
-            if (action.act_enum == Action.ACTION_FORWARD):
-                outports.append(action.out_port)
+            if (action.act_enum == OpenFlowSwitch.Action.ACTION_FORWARD):
+                outports.append(int(action.out_port))
 
+        if (rule.in_port is None):
+            inports = []
+        else:
+            inports = [int(rule.in_port)]
+
+        converted_rule = TF.create_standard_rule(inports, match, outports, mask, rewrite)
+        tf.add_rewrite_rule(converted_rule)
+    
+    # complete tf:
+    switch_tfs[switch_name] = tf
+    
+
+print switch_tfs
+# output HSA tf results:
+for rtrname in switch_tfs:
+    print "==============", rtrname, "=============="
+    print switch_tfs[rtrname]
+
+# TODO: merge based on pipeline
+
+
+"""
             # get mask/rewrite
-            if (action.act_name == Action.ACTION_MOD_DL_SRC):
+            if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_SRC):
                 # 4th parameter is int
                 set_header_field(formatt, mask, "ip_src", 0, 0)
-                set_header_field(formatt, rewrite, "ip_src", dotted_ip_to_int(action.ip_src), 0)
-            if (action.act_name == Action.ACTION_MOD_DL_DST):
+                set_header_field(formatt, rewrite, "ip_src", dotted_ip_to_int(action.new_value), 0)
+            if (action.act_name == OpenFlowSwitch.Action.ACTION_MOD_DL_DST):
+
                 set_header_field(formatt, mask, "ip_dst", 0, 0)
-                set_header_field(formatt, rewrite, "ip_dst", dotted_ip_to_int(action.ip_dst), 0)
-
-        # list of ints and 3 wildcards
-        inports  = rule.in_ports
-        match    = rule.match
-        mask     = rule.mask
-        rewrite  = rule.rewrite
-        
-        converted_rule = TF.create_custom_rule(inports, match, outports, mask, rewrite)
-        tf.add_custom_rule(converted_rule)
-        
-# TODO: merged based on pipeline
-
-
+                set_header_field(formatt, rewrite, "ip_dst", dotted_ip_to_int(action.new_value), 0)
+"""
