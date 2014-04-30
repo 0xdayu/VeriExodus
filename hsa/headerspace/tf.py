@@ -229,7 +229,10 @@ class TF(object):
     # returns subset match of outer matching on inner
     @staticmethod
     def is_match(outer, inner):
-        return wildcard_intersect(outer, inner) != None
+        print outer
+        print inner
+        print (wildcard_intersect(outer, inner))
+        return len(wildcard_intersect(outer, inner)) > 0
     
     @staticmethod
     def merge_match(match1, mask1, rewrite1, match2):
@@ -473,7 +476,6 @@ class TF(object):
         Note: Once rule added to TF, TF will own the rule. avoid reusing rule.
         '''
         # find existing rules with same fields
-        '''
         for r in self.rules:
             if wildcard_is_equal(rule["match"], r["match"]) and \
                wildcard_is_equal(rule["mask"], r["mask"]) and \
@@ -491,7 +493,6 @@ class TF(object):
                 
                 # don't add, already merged with existing rule
                 return
-        '''
         
         # Mask rewrite
         rule['rewrite'] = wildcard_and(\

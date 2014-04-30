@@ -94,3 +94,29 @@ def set_header_field(hs_format, arr, field, value, right_mask):
             lm = ~rm & 0xffff
             arr[start_pos + i] = \
             (wc_array[i] & rm) | (arr[start_pos + i] & lm)
+
+def set_wildcard_field(hs_format, arr, field, value, right_mask):
+    '''
+    Sets the @field in wildcard @arr to @value.
+    @hs_format: field names, such as 'vlan', 'ip_src', 'ip_dst',
+    'ip_proto', 'transport_src', 'transport_dst', 'transport_ctrl', etc
+    each feild should have _len (length) and _pos (position). look at
+    cisco_router_parser for an example.
+    @arr: the wildcard to set the field bits to value.
+    @field: a field name
+    @value: an integer number, of the width equal to field's width
+    @right_mask: number of bits, from right that should be ignored when
+    written to field. e.g. to have a /24 ip address, set mask to 8.
+    '''
+    wc_array = value
+    start_pos = hs_format["%s_pos" % field]
+    for i in range(hs_format["%s_len" % field]):
+        if right_mask <= 8 * i:
+            arr[start_pos + i] = wc_array[i]
+        elif (right_mask > 8 * i and right_mask < 8 * i + 8):
+            shft = right_mask % 8;
+            rm = (0xffff << 2 * shft) & 0xffff
+            lm = ~rm & 0xffff
+            arr[start_pos + i] = \
+            (wc_array[i] & rm) | (arr[start_pos + i] & lm)
+

@@ -39,25 +39,16 @@ class OpenFlowSwitch(object):
         FIELD_TP_DST = "tp_dst"
 
         def __init__(self, priority, ethertype, protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst):
-            assert isinstance(ethertype, int)
             assert isinstance(priority, int)
 
-            if ethertype is not None:
-                assert ethertype >= 0 and ethertype < 65535
-            if protocol is not None:
-                assert protocol >= 0 and protocol < 256
-            if dl_src is not None:
-                assert is_mac_address(dl_src)
-            if dl_dst is not None:
-                assert is_mac_address(dl_dst)
-            if nw_src is not None:
-                assert is_ip_address(nw_src) or is_ip_subnet(nw_src)
-            if nw_dst is not None:
-                assert is_ip_address(nw_dst) or is_ip_subnet(nw_dst)
-            if in_port is not None:
-                assert isinstance(in_port, str)
-            if tp_dst is not None:
-                assert isinstance(tp_dst, int) and tp_dst >= 0 and tp_dst < 65536
+            assert ethertype is None or (ethertype >= 0 and ethertype < 65535)
+            assert protocol is None or (protocol >= 0 and protocol < 256)
+            assert dl_src is None or  is_mac_address(dl_src)
+            assert dl_dst is None or is_mac_address(dl_dst)
+            assert nw_src is None or is_ip_address(nw_src) or is_ip_subnet(nw_src)
+            assert nw_dst is None or is_ip_address(nw_dst) or is_ip_subnet(nw_dst)
+            assert in_port is None or isinstance(in_port, str)
+            assert tp_dst is None or (isinstance(tp_dst, int) and tp_dst >= 0 and tp_dst < 65536)
 
             self.priority = priority
             self.ethertype = ethertype
@@ -74,6 +65,8 @@ class OpenFlowSwitch(object):
     class Action(object):
         ACTION_MOD_DL_SRC = "mod_dl_src"
         ACTION_MOD_DL_DST = "mod_dl_dst"
+        ACTION_MOD_NW_SRC = "mod_nw_src"
+        ACTION_MOD_NW_DST = "mod_nw_dst"
         ACTION_FORWARD = "output"
         ACTION_ALL = "ALL"
         ACTION_DROP = "drop"
@@ -81,13 +74,16 @@ class OpenFlowSwitch(object):
     
     class ActionModification(Action):
         def __init__(self, act_enum, new_value):
-            assert act_enum == self.ACTION_MOD_DL_DST or self.ACTION_MOD_DL_SRC
+            assert act_enum == self.ACTION_MOD_DL_DST or self.ACTION_MOD_DL_SRC or \
+                    act_enum == self.ACTION_MOD_NW_DST or act_enum == self.ACTION_MOD_NW_SRC
             self.act_enum = act_enum
 
-            if act_enum == self.ACTION_MOD_DL_DST or act_enum == self.ACTION_MOD_DL_SRC:
+            if act_enum == self.ACTION_MOD_NW_DST or act_enum == self.ACTION_MOD_NW_SRC:
+                assert is_ip_address(new_value) or is_ip_subnet(new_value)
+            elif act_enum == self.ACTION_MOD_DL_DST or act_enum == self.ACTION_MOD_DL_SRC:
                 assert is_mac_address(new_value)
             else:
-                raise ValueError("No ip address modification encountered so far!")
+                raise ValueError("Unusual modification")
 
             self.new_value = new_value
 
@@ -127,9 +123,11 @@ def read_openflow_tables(targets, file_path):
         enum_act_drop = OpenFlowSwitch.Action.ACTION_DROP
         enum_act_mod_dl_src = OpenFlowSwitch.Action.ACTION_MOD_DL_SRC
         enum_act_mod_dl_dst = OpenFlowSwitch.Action.ACTION_MOD_DL_DST
+        enum_act_mod_nw_src = OpenFlowSwitch.Action.ACTION_MOD_NW_SRC
+        enum_act_mod_nw_dst = OpenFlowSwitch.Action.ACTION_MOD_NW_DST
         enum_act_flood = OpenFlowSwitch.Action.ACTION_ALL
         enum_act_forward = OpenFlowSwitch.Action.ACTION_FORWARD
-
+        
         for txt_action in entry.split(','):
             if txt_action.startswith(enum_act_to_ctrl):
                 ctrl_port = txt_action[len(enum_act_to_ctrl) + len(':') :]
@@ -142,6 +140,12 @@ def read_openflow_tables(targets, file_path):
             elif txt_action.startswith(enum_act_mod_dl_src):
                 new_val = txt_action[len(enum_act_mod_dl_src) + len(':') :]
                 act_list += [OpenFlowSwitch.ActionModification(enum_act_mod_dl_src, new_val)]
+            elif txt_action.startswith(enum_act_mod_nw_dst):
+                new_val = txt_action[len(enum_act_mod_nw_dst) + len(':') :]
+                act_list += [OpenFlowSwitch.ActionModification(enum_act_mod_nw_dst, new_val)]
+            elif txt_action.startswith(enum_act_mod_nw_src):
+                new_val = txt_action[len(enum_act_mod_nw_src) + len(':') :]
+                act_list += [OpenFlowSwitch.ActionModification(enum_act_mod_nw_src, new_val)]
             elif txt_action.startswith(enum_act_flood):
                 act_list += [OpenFlowSwitch.ActionDataLinkFlood(enum_act_flood)]
             elif txt_action.startswith(enum_act_forward):
@@ -153,7 +157,7 @@ def read_openflow_tables(targets, file_path):
     def parse_match_rule(entry):
         fields = entry.split(',')
         priority = int(fields[0])
-        ethertype, protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst = 0x0800, None, None, None, None, None, None, None
+        ethertype, protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst = None, None, None, None, None, None, None, None
 
         enum_mch_in_port = OpenFlowSwitch.MatchRule.FIELD_IN_PORT
         enum_mch_dl_src = OpenFlowSwitch.MatchRule.FIELD_DL_SRC
@@ -169,6 +173,7 @@ def read_openflow_tables(targets, file_path):
             if testEthertype is not None:
                 ethertype = testEthertype
             elif testProt is not None:
+                ethertype = 0x0800
                 protocol = testProt
             elif txt_field.startswith(enum_mch_dl_src):
                 dl_src = txt_field[len(enum_mch_dl_src) + len(':') :]

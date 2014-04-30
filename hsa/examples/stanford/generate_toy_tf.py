@@ -239,6 +239,33 @@ for switch_name in h_switches:
                 outports.append(int(action.out_port))
 
             # TODO: dl modifications
+            if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_SRC):
+                new_mask = wildcard_create_bit_repeat(formatt["dl_src_len"], 0x01)
+                set_wildcard_field(formatt, mask, "dl_src", new_mask, 0)
+                set_header_field(formatt, rewrite, "dl_src", mac_to_int(action.new_value), 0)
+            if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_DST):
+                new_mask = wildcard_create_bit_repeat(formatt["dl_dst_len"], 0x01)
+                set_wildcard_field(formatt, mask, "dl_dst", new_mask, 0)
+                set_header_field(formatt, rewrite, "dl_dst", mac_to_int(action.new_value), 0)
+                
+            if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_NW_SRC):
+                new_mask = wildcard_create_bit_repeat(formatt["ip_src_len"], 0x01)
+                if is_ip_subnet(action.new_value):
+                    intSubnet, intMask = dotted_subnet_to_int(action.new_value)
+                    set_wildcard_field(formatt, mask, "ip_src", new_mask, 32 - intMask)
+                    set_header_field(formatt, rewrite, "ip_src", intSubnet, 32 - intMask)
+                else:
+                    set_header_field(formatt, rewrite, "ip_src", dotted_ip_to_int(action.new_value), 0)
+
+            if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_NW_DST):
+                new_mask = wildcard_create_bit_repeat(formatt["ip_dst_len"], 0x01)
+                if is_ip_subnet(action.new_value):
+                    intSubnet, intMask = dotted_subnet_to_int(action.new_value)
+                    set_wildcard_field(formatt, mask, "ip_dst", new_mask, 32 - intMask)
+                    set_header_field(formatt, rewrite, "ip_dst", intSubnet, 32 - intMask)
+                else:
+                    set_header_field(formatt, rewrite, "ip_dst", dotted_ip_to_int(action.new_value), 0)
+
             # sending to controller
             if (action.act_enum == OpenFlowSwitch.Action.ACTION_TO_CTRL):
                 outports.append(65535)
