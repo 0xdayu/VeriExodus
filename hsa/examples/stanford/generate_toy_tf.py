@@ -204,7 +204,6 @@ for switch_name in h_switches:
             "dl_dst": "dl_dst",             \
             "nw_src": "ip_src",             \
             "nw_dst": "ip_dst",             \
-            "tp_src": "transport_src",      \
             "tp_dst": "transport_dst",      \
             "protocol": "ip_proto"          \
         }
@@ -218,6 +217,9 @@ for switch_name in h_switches:
                 elif (isinstance(val, str) and is_ip_address(val)):
                     intIp = dotted_ip_to_int(val)
                     set_header_field(formatt, match, hsaFieldName, intIp, 0)
+                elif (isinstance(val, str) and is_mac_address(val)):
+                    intMac = mac_to_int(val)
+                    set_header_field(formatt, match, hsaFieldName, intMac, 0)
                 else:
                     # port or protocol
                     set_header_field(formatt, match, hsaFieldName, val, 0)

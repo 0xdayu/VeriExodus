@@ -45,12 +45,10 @@ class OpenFlowSwitch(object):
     class Action(object):
         ACTION_MOD_DL_SRC = "mod_dl_src"
         ACTION_MOD_DL_DST = "mod_dl_dst"
-    ACTION_FORWARD = "output"
-    ACTION_ALL = "ALL"
-    ACTION_DROP = "drop"
-    ACTION_TO_CTRL = "CONTROLLER"
-
-        pass
+        ACTION_FORWARD = "output"
+        ACTION_ALL = "ALL"
+        ACTION_DROP = "drop"
+        ACTION_TO_CTRL = "CONTROLLER"
     
     class ActionModification(Action):
         def __init__(self, act_enum, new_value):
@@ -143,6 +141,7 @@ def read_openflow_tables(targets, file_path):
 
         for txt_field in fields[1 :]:
             testprot = cisco_router.get_protocol_number(txt_field)
+            print testprot
             if (testprot is not None):
                 protocol = testprot
             elif txt_field.startswith(enum_mch_dl_src):
