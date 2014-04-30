@@ -152,6 +152,7 @@ def generate_topology(pipeline, nSubnets, f_in_pt, f_out_pt, f_rtr_pt):
 toy_tables = set(["ext-rtr", "ext-nat", "ext-tr", "ext-acl"])
 h_switches = read_openflow_tables(toy_tables, "toy_example/exodus-dumpflows.txt")
 pipeline = ["ext-acl", "ext-tr", "ext-rtr", "ext-tr", "ext-acl"]
+pipeline_ports = [TF.fwd_port_mapper, TF.fwd_port_mapper, TF.bck_port_mapper, TF.bck_port_mapper]
 f_in_pt = lambda n : str(2 * n - 1)
 f_out_pt = lambda n : str(2 * n)
 f_rtr_pt = lambda n : str(n + 1)
@@ -189,7 +190,6 @@ for switch_name in h_switches:
     switch = h_switches[switch_name]
     tf = TF(formatt["length"])
     
-    print "================= ", switch_name, len(switch.table_rows), " ================="
     # convert match rules
     for rule in switch.table_rows:
         outports = list()
@@ -247,17 +247,11 @@ for rtrname in switch_tfs:
     print "==============", rtrname, "=============="
     print switch_tfs[rtrname]
 
-# TODO: merge based on pipeline
+# merge based on pipeline
+merged_tf = switch_tfs[pipeline[0]]
+for i in range(1, len(pipeline)):
+    switch = switch_tfs[pipeline[i]]
+    merged_tf = TF.merge_tfs(merged_tf, switch, pipeline_ports[i - 1])
 
+print merged_tf
 
-"""
-            # get mask/rewrite
-            if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_SRC):
-                # 4th parameter is int
-                set_header_field(formatt, mask, "ip_src", 0, 0)
-                set_header_field(formatt, rewrite, "ip_src", dotted_ip_to_int(action.new_value), 0)
-            if (action.act_name == OpenFlowSwitch.Action.ACTION_MOD_DL_DST):
-
-                set_header_field(formatt, mask, "ip_dst", 0, 0)
-                set_header_field(formatt, rewrite, "ip_dst", dotted_ip_to_int(action.new_value), 0)
-"""

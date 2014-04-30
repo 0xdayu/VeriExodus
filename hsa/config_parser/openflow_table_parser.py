@@ -141,7 +141,6 @@ def read_openflow_tables(targets, file_path):
 
         for txt_field in fields[1 :]:
             testprot = cisco_router.get_protocol_number(txt_field)
-            print testprot
             if (testprot is not None):
                 protocol = testprot
             elif txt_field.startswith(enum_mch_dl_src):

@@ -189,45 +189,49 @@ class TF(object):
         return port - 1
     
     @staticmethod
-    def merge_tf(tf1, tf2, port_mapper):
+    def merge_tfs(tf1, tf2, port_mapper):
         rtf = TF(tf1.length)
         
         for r1 in tf1.rules:
             for r2 in tf2.rules:
-                newrule = merge_rule(r1, r2)
+                newrule = TF.merge_rule(r1, r2, port_mapper)
                 if (newrule != None):
                     rtf.add_fwd_rule(newrule)
 
         return rtf
 
     @staticmethod
-    def merge_rule(r1, r2):
+    def merge_rule(r1, r2, port_mapper):
         outport = set(map(port_mapper, r1["out_ports"]))
         inport = set(r2["in_ports"])
         
-        rewritten_match = rewrite_hsa(r1["match"], r1["mask"], r1["rewrite"])
+        rewritten_match = TF.rewrite_hsa(r1["match"], r1["mask"], r1["rewrite"])
         
         if (len(outport.intersection(inport)) > 0 and \
-                is_match(rewritten_match, r2["match"])):
+                TF.is_match(rewritten_match, r2["match"])):
             # r1 contains r2
                 # add two rules, one drops?
             # r1 takes less than or equal r2
                 # just merge
             # merge r1 and r2
             new_inports  = r1["in_ports"]
-            new_match    = merge_match(r1["match"], r1["mask"], r1["rewrite"], r2["match"])
+            new_match    = TF.merge_match(r1["match"], r1["mask"], r1["rewrite"], r2["match"])
             new_outports = r2["out_ports"]
-            new_mask     = merge_mask(r1["mask"], r2["mask"])
-            new_rewrite  = merge_rewrite(r1["rewrite"], r2["mask"], r2["rewrite"])
+            new_mask     = TF.merge_mask(r1["mask"], r2["mask"])
+            new_rewrite  = TF.merge_rewrite(r1["rewrite"], r2["mask"], r2["rewrite"])
 
     # rewrite first match to compare with second match
+    @staticmethod
     def rewrite_hsa(match, mask, rewrite):
-        return wildcard_rewrite(match, mask, rewrite)
+        res = wildcard_rewrite(match, mask, rewrite)
+        return res[0]
     
     # returns subset match of outer matching on inner
+    @staticmethod
     def is_match(outer, inner):
         return wildcard_intersect(outer, inner) != None
     
+    @staticmethod
     def merge_match(match1, mask1, rewrite1, match2):
         result = wildcard_copy(match1)
         
@@ -235,16 +239,18 @@ class TF(object):
             if (mask1[i] == 0x1 or mask1[i] == 0x2):
                 result[i] = mask1[i]
             else:
-                if (rewrite[i] == 0x1):
+                if (rewrite1[i] == 0x1):
                     result[i] = 0x3
                 else:
                     result[i] = match2[i]
         
         return result
     
+    @staticmethod
     def merge_mask(mask1, mask2):
         wildcard_and(mask1, mask2)
 
+    @staticmethod
     def merge_rewrite(rw1, mask2, rw2):
         wildcard_rewrite(rw1, mask2, rw2)
         
