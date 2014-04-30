@@ -199,7 +199,15 @@ for switch_name in h_switches:
         
         # create "match" by piecing together requirements
         # "dl_src", "dl_dst", 
-        fields = {"nw_src": "ip_src", "nw_dst": "ip_dst", "tp_dst": "transport_dst"}
+        fields = {                          \
+            "dl_src": "dl_src",             \
+            "dl_dst": "dl_dst",             \
+            "nw_src": "ip_src",             \
+            "nw_dst": "ip_dst",             \
+            "tp_src": "transport_src",      \
+            "tp_dst": "transport_dst",      \
+            "protocol": "ip_proto"          \
+        }
         for pktFieldName, hsaFieldName in fields.iteritems():
             val = getattr(rule, pktFieldName)
             if val is not None:
@@ -211,7 +219,7 @@ for switch_name in h_switches:
                     intIp = dotted_ip_to_int(val)
                     set_header_field(formatt, match, hsaFieldName, intIp, 0)
                 else:
-                    # port
+                    # port or protocol
                     set_header_field(formatt, match, hsaFieldName, val, 0)
             
         for action in rule.act_list:

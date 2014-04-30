@@ -16,11 +16,8 @@ class OpenFlowSwitch(object):
 
         def __init__(self, priority, protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst):
             assert isinstance(priority, int)
-            self.protocol = protocol
-            #self.protocol = cisco_router_parser.get_protocol_number(protocol)
-            self.priority = priority
-            #if protocol is not None:
-            #    assert protocol == self.FIELD_IP or protocol == self.FIELD_ARP or protocol == self.FIELD_TCP
+            if protocol is not None:
+                assert protocol >= 0 and protocol < 256
             if dl_src is not None:
                 assert is_mac_address(dl_src)
             if dl_dst is not None:
@@ -34,6 +31,8 @@ class OpenFlowSwitch(object):
             if tp_dst is not None:
                 assert isinstance(tp_dst, int) and tp_dst >= 0 and tp_dst < 65536
 
+            self.priority = priority
+            self.protocol = protocol
             self.dl_src, self.dl_dst = dl_src, dl_dst
             self.nw_src, self.nw_dst = nw_src, nw_dst
             self.in_port = in_port
@@ -44,12 +43,12 @@ class OpenFlowSwitch(object):
             self.act_list += actions
 
     class Action(object):
-	ACTION_MOD_DL_SRC = "mod_dl_src"
-	ACTION_MOD_DL_DST = "mod_dl_dst"
-	ACTION_FORWARD = "output"
-	ACTION_ALL = "ALL"
-	ACTION_DROP = "drop"
-	ACTION_TO_CTRL = "CONTROLLER"
+        ACTION_MOD_DL_SRC = "mod_dl_src"
+        ACTION_MOD_DL_DST = "mod_dl_dst"
+    ACTION_FORWARD = "output"
+    ACTION_ALL = "ALL"
+    ACTION_DROP = "drop"
+    ACTION_TO_CTRL = "CONTROLLER"
 
         pass
     
@@ -143,11 +142,9 @@ def read_openflow_tables(targets, file_path):
         enum_mch_tp_dst = OpenFlowSwitch.MatchRule.FIELD_TP_DST
 
         for txt_field in fields[1 :]:
-            if txt_field ==  enum_mch_ip or txt_field == enum_mch_arp or txt_field == enum_mch_tcp:
-                protocol = txt_field
-            #cisco_router_parser.get_protocol_number(txt_field)
-            #if 
-            #    protocol
+            testprot = cisco_router.get_protocol_number(txt_field)
+            if (testprot is not None):
+                protocol = testprot
             elif txt_field.startswith(enum_mch_dl_src):
                 dl_src = txt_field[len(enum_mch_dl_src) + len(':') :]
             elif txt_field.startswith(enum_mch_dl_dst):
