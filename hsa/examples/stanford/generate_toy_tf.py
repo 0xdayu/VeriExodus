@@ -150,13 +150,19 @@ def generate_topology(pipeline, nSubnets, f_in_pt, f_out_pt, f_rtr_pt):
     return firstHalf + secondHalf
 
 toy_tables = set(["ext-rtr", "ext-nat", "ext-tr", "ext-acl"])
-h_switches = read_openflow_tables(toy_tables, "toy_example/exodus-dumpflows.txt")
-pipeline = ["ext-acl", "ext-tr", "ext-rtr", "ext-tr", "ext-acl"]
-pipeline_ports = [TF.fwd_port_mapper, TF.fwd_port_mapper, TF.bck_port_mapper, TF.bck_port_mapper]
 f_in_pt = lambda n : str(2 * n - 1)
 f_out_pt = lambda n : str(2 * n)
 f_rtr_pt = lambda n : str(n + 1)
+
+pmap_fwd = lambda n : n - 1
+pmap_rtr = lambda n : n / 2 + 1
+pmap_outrtr = lambda n : (n - 1) * 2
+pmap_bck = lambda n : n + 1
+pipeline = ["ext-acl", "ext-tr", "ext-rtr", "ext-tr", "ext-acl"]
+pipeline_ports = [pmap_fwd, pmap_rtr, pmap_outrtr, pmap_bck]
+
 num_of_subnets = 2
+h_switches = read_openflow_tables(toy_tables, "toy_example/exodus-dumpflows.txt")
 """
 topology = generate_topology(pipeline, num_of_subnets, f_in_pt, f_out_pt, f_rtr_pt)
 forest = generate_rule_trees(pipeline, topology, h_switches)
@@ -172,6 +178,7 @@ formatt["transport_dst_pos"] = 13
 formatt["transport_ctrl_pos"] = 15
 formatt["dl_src_pos"] = 16
 formatt["dl_dst_pos"] = 22
+formatt["dl_proto_pos"] = 28
 formatt["vlan_len"] = 2
 formatt["ip_src_len"] = 4
 formatt["ip_dst_len"] = 4
@@ -181,7 +188,8 @@ formatt["transport_dst_len"] = 2
 formatt["transport_ctrl_len"] = 1
 formatt["dl_src_len"] = 6
 formatt["dl_dst_len"] = 6
-formatt["length"] = 28
+formatt["dl_proto_len"] = 2
+formatt["length"] = 30
 
 switch_tfs = dict()
 
@@ -202,6 +210,7 @@ for switch_name in h_switches:
         fields = {                          \
             "dl_src": "dl_src",             \
             "dl_dst": "dl_dst",             \
+            "ethertype": "dl_proto",        \
             "nw_src": "ip_src",             \
             "nw_dst": "ip_dst",             \
             "tp_dst": "transport_dst",      \
@@ -229,6 +238,11 @@ for switch_name in h_switches:
             if (action.act_enum == OpenFlowSwitch.Action.ACTION_FORWARD):
                 outports.append(int(action.out_port))
 
+            # TODO: dl modifications
+            # sending to controller
+            if (action.act_enum == OpenFlowSwitch.Action.ACTION_TO_CTRL):
+                outports.append(65535)
+
         if (rule.in_port is None):
             inports = []
         else:
@@ -243,18 +257,20 @@ for switch_name in h_switches:
 
 print switch_tfs
 # output HSA tf results:
-"""
+tfile = open("switch_tfs", "w")
 for rtrname in switch_tfs:
-    print "==============", rtrname, "=============="
-    print switch_tfs[rtrname]
-"""
+    tfile.write("==============" + rtrname + "==============\n")
+    tfile.write(str(switch_tfs[rtrname]))
+    tfile.write("\n");
+tfile.close()
 
 # merge based on pipeline
 merged_tf = switch_tfs[pipeline[0]]
-for i in range(1, len(pipeline)):
+for i in range(1, 2):#, len(pipeline)):
     switch = switch_tfs[pipeline[i]]
     merged_tf = TF.merge_tfs(merged_tf, switch, pipeline_ports[i - 1])
     print "Merged TF:"
     print merged_tf
+
 
 

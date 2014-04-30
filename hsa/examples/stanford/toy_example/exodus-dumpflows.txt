@@ -19,17 +19,7 @@ mininet> dpctl dump-flows --rsort
  cookie=0x0, duration=68.967s, table=0, n_packets=0, n_bytes=0, priority=65532,ip,in_port=4,nw_dst=10.1.1.0/24 actions=CONTROLLER:65535
  cookie=0x0, duration=68.967s, table=0, n_packets=0, n_bytes=0, priority=65531 actions=drop
 *** ext-acl ------------------------------------------------------------------------
- cookie=0x0, duration=68.941s, table=0, n_packets=0, n_bytes=0, priority=65535,ip,in_port=2 actions=output:1
- cookie=0x0, duration=68.941s, table=0, n_packets=0, n_bytes=0, priority=65535,ip,in_port=4 actions=output:3
- cookie=0x0, duration=68.941s, table=0, n_packets=0, n_bytes=0, priority=65535,tcp,in_port=1,nw_src=10.200.200.200 actions=drop
- cookie=0x0, duration=68.941s, table=0, n_packets=0, n_bytes=0, priority=65535,tcp,in_port=3,nw_src=10.1.1.1,nw_dst=10.200.200.200,tp_dst=22 actions=CONTROLLER:65535
- cookie=0x0, duration=68.941s, table=0, n_packets=0, n_bytes=0, priority=65535,tcp,in_port=3,nw_src=10.1.1.1,nw_dst=10.200.200.200,tp_dst=80 actions=CONTROLLER:65535
- cookie=0x0, duration=68.941s, table=0, n_packets=0, n_bytes=0, priority=65534,tcp,in_port=1,nw_dst=10.1.1.3,tp_dst=25 actions=output:2
- cookie=0x0, duration=68.941s, table=0, n_packets=0, n_bytes=0, priority=65534,tcp,in_port=1,nw_dst=10.1.1.4,tp_dst=80 actions=output:2
- cookie=0x0, duration=68.941s, table=0, n_packets=0, n_bytes=0, priority=65534,tcp,in_port=3,nw_src=10.1.1.1,nw_dst=10.200.200.200 actions=drop
- cookie=0x0, duration=68.941s, table=0, n_packets=0, n_bytes=0, priority=65533,tcp,in_port=3,nw_src=10.1.1.1,tp_dst=22 actions=output:4,CONTROLLER:65535
  cookie=0x0, duration=68.941s, table=0, n_packets=0, n_bytes=0, priority=65533,tcp,in_port=3,nw_src=10.1.1.1,tp_dst=80 actions=output:4,CONTROLLER:65535
- cookie=0x0, duration=68.941s, table=0, n_packets=0, n_bytes=0, priority=65532 actions=drop
 *** rs1 ------------------------------------------------------------------------
  cookie=0x0, duration=68.793s, table=0, n_packets=0, n_bytes=0, priority=65535,arp,dl_src=00:00:ca:fe:ca:fe actions=ALL
  cookie=0x0, duration=68.793s, table=0, n_packets=0, n_bytes=0, priority=65534,arp actions=CONTROLLER:65535

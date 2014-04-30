@@ -208,13 +208,9 @@ class TF(object):
         new_tf = TF(r1["match"].length)
         rewritten_match = TF.rewrite_hsa(r1["match"], r1["mask"], r1["rewrite"])
         
-        if (len(outport.intersection(inport)) > 0 and \
-                TF.is_match(rewritten_match, r2["match"])):
-            print "match"
-            # r1 contains r2
-                # add two rules, one drops?
-            # r1 takes less than or equal r2
-                # just merge
+        # either inport -> outport or inport is all packets
+        if (len(outport.intersection(inport)) > 0 or len(inport) == 0) and \
+                TF.is_match(rewritten_match, r2["match"]):
             # merge r1 and r2
             new_inports  = r1["in_ports"]
             new_match    = TF.merge_match(r1["match"], r1["mask"], r1["rewrite"], r2["match"])
@@ -240,13 +236,30 @@ class TF(object):
         result = wildcard_copy(match1)
         
         for i in range(len(match1)):
-            if (mask1[i] == 0x1 or mask1[i] == 0x2):
-                result[i] = mask1[i]
-            else:
-                if (rewrite1[i] == 0x1):
-                    result[i] = 0x3
+            # TODO: make faster by using wildcard functions
+            
+            resultbyte = 0
+            
+            for j in range(0, 16, 2):
+                #resultbyte = resultbyte << 2
+
+                matchbit = (match1[i] >> j) % 4
+                maskbit  = (mask1[i] >> j) % 4
+                match2bit= (match2[i] >> j) % 4
+                
+                if (matchbit == 0x1 or matchbit == 0x2):
+                    # has to match first rule
+                    resultbyte = resultbyte | (matchbit << j)
                 else:
-                    result[i] = match2[i]
+                    # first match flexible, so consider mask
+                    if (maskbit == 0x1):
+                        # rewriting anyways, so "x"
+                        resultbyte = resultbyte | (0x3 << j)
+                    else:
+                        # not rewriting, use second match
+                        resultbyte = resultbyte | (match2bit << j)
+
+            result[i] = resultbyte
         
         return result
     
@@ -459,6 +472,27 @@ class TF(object):
         @position: position of rule in the table
         Note: Once rule added to TF, TF will own the rule. avoid reusing rule.
         '''
+        # find existing rules with same fields
+        '''
+        for r in self.rules:
+            if wildcard_is_equal(rule["match"], r["match"]) and \
+               wildcard_is_equal(rule["mask"], r["mask"]) and \
+               wildcard_is_equal(rule["rewrite"], r["rewrite"]) and \
+               set(rule["out_ports"]) == set(r["out_ports"]):
+                
+                print (r["in_ports"]), (rule["in_ports"])
+                if len(r["in_ports"]) == 0 or len(rule["in_ports"]) == 0:
+                    r["in_ports"] = []
+                else:
+                    print(r["in_ports"])
+                    print(rule["in_ports"])
+                    r["in_ports"] = list(set(r["in_ports"]).union(rule["in_ports"]))
+                    print r["in_ports"]
+                
+                # don't add, already merged with existing rule
+                return
+        '''
+        
         # Mask rewrite
         rule['rewrite'] = wildcard_and(\
                                                 wildcard_not(rule['mask']),\

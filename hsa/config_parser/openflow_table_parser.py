@@ -1,6 +1,30 @@
 from utils.helper import is_mac_address, is_ip_address, is_ip_subnet
 from headerspace.tf import *
-from config_parser.cisco_router_parser import *
+
+
+def get_ethertype_number(proto_name):
+  dict = {"ip": 0x0800, "arp": 0x0806, "ipv6": 0x86dd}
+  if proto_name in dict.keys():
+    return dict[proto_name]
+  else:
+    try:
+      num = int(proto_name)
+      return num
+    except Exception as e:
+      return None
+
+def get_protocol_number(proto_name):
+  dict = {"ah":51, "eigrp":88, "esp":50, "gre":47, "icmp":1, "igmp":2, \
+      "igrp":9, "ipinip":94, "nos":4, "ospf":89, "tcp":6, \
+      "udp":17}
+  if proto_name in dict.keys():
+    return dict[proto_name]
+  else:
+    try:
+      num = int(proto_name)
+      return num
+    except Exception as e:
+      return None
 
 class OpenFlowSwitch(object):
     PATTERN_PRIORITY = "priority"
@@ -14,8 +38,12 @@ class OpenFlowSwitch(object):
         FIELD_NW_DST = "nw_dst"
         FIELD_TP_DST = "tp_dst"
 
-        def __init__(self, priority, protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst):
+        def __init__(self, priority, ethertype, protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst):
+            assert isinstance(ethertype, int)
             assert isinstance(priority, int)
+
+            if ethertype is not None:
+                assert ethertype >= 0 and ethertype < 65535
             if protocol is not None:
                 assert protocol >= 0 and protocol < 256
             if dl_src is not None:
@@ -32,6 +60,7 @@ class OpenFlowSwitch(object):
                 assert isinstance(tp_dst, int) and tp_dst >= 0 and tp_dst < 65536
 
             self.priority = priority
+            self.ethertype = ethertype
             self.protocol = protocol
             self.dl_src, self.dl_dst = dl_src, dl_dst
             self.nw_src, self.nw_dst = nw_src, nw_dst
@@ -124,14 +153,8 @@ def read_openflow_tables(targets, file_path):
     def parse_match_rule(entry):
         fields = entry.split(',')
         priority = int(fields[0])
-        protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst = None, None, None, None, None, None, None
+        ethertype, protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst = 0x0800, None, None, None, None, None, None, None
 
-        """enum_mch_ip = OpenFlowSwitch.MatchRule.FIELD_IP
-        enum_mch_arp = OpenFlowSwitch.MatchRule.FIELD_ARP
-        enum_mch_tcp = OpenFlowSwitch.MatchRule.FIELD_TCP"""
-        enum_mch_ip = "ip"
-        enum_mch_arp = "arp"
-        enum_mch_tcp = "tcp"
         enum_mch_in_port = OpenFlowSwitch.MatchRule.FIELD_IN_PORT
         enum_mch_dl_src = OpenFlowSwitch.MatchRule.FIELD_DL_SRC
         enum_mch_dl_dst = OpenFlowSwitch.MatchRule.FIELD_DL_DST
@@ -140,9 +163,13 @@ def read_openflow_tables(targets, file_path):
         enum_mch_tp_dst = OpenFlowSwitch.MatchRule.FIELD_TP_DST
 
         for txt_field in fields[1 :]:
-            testprot = cisco_router.get_protocol_number(txt_field)
-            if (testprot is not None):
-                protocol = testprot
+            testEthertype = get_ethertype_number(txt_field)
+            testProt = get_protocol_number(txt_field)
+
+            if testEthertype is not None:
+                ethertype = testEthertype
+            elif testProt is not None:
+                protocol = testProt
             elif txt_field.startswith(enum_mch_dl_src):
                 dl_src = txt_field[len(enum_mch_dl_src) + len(':') :]
             elif txt_field.startswith(enum_mch_dl_dst):
@@ -158,7 +185,7 @@ def read_openflow_tables(targets, file_path):
             else:
                 raise ValueError("Match field not considered: %s" % txt_field)
 
-        return OpenFlowSwitch.MatchRule(priority, protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst)
+        return OpenFlowSwitch.MatchRule(priority, ethertype, protocol, in_port, dl_src, dl_dst, nw_src, nw_dst, tp_dst)
         
     print "=== Reading OpenFlow Router table ==="
     f = open(file_path, 'r')

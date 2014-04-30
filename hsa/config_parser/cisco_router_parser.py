@@ -198,7 +198,7 @@ class cisco_router(object):
   def get_protocol_number(proto_name):
     dict = {"ah":51, "eigrp":88, "esp":50, "gre":47, "icmp":1, "igmp":2, \
         "igrp":9, "ip": 0, "ipinip":94, "nos":4, "ospf":89, "tcp":6, \
-        "udp":17, "arp":255}
+        "udp":17}
     if proto_name in dict.keys():
       return dict[proto_name]
     else:
