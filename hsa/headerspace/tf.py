@@ -196,7 +196,7 @@ class TF(object):
             for r2 in tf2.rules:
                 newrule = TF.merge_rule(r1, r2, port_mapper)
                 if (newrule != None):
-                    rtf.add_fwd_rule(newrule)
+                    rtf.add_rewrite_rule(newrule)
 
         return rtf
 
@@ -205,10 +205,12 @@ class TF(object):
         outport = set(map(port_mapper, r1["out_ports"]))
         inport = set(r2["in_ports"])
         
+        new_tf = TF(r1["match"].length)
         rewritten_match = TF.rewrite_hsa(r1["match"], r1["mask"], r1["rewrite"])
         
         if (len(outport.intersection(inport)) > 0 and \
                 TF.is_match(rewritten_match, r2["match"])):
+            print "match"
             # r1 contains r2
                 # add two rules, one drops?
             # r1 takes less than or equal r2
@@ -219,6 +221,8 @@ class TF(object):
             new_outports = r2["out_ports"]
             new_mask     = TF.merge_mask(r1["mask"], r2["mask"])
             new_rewrite  = TF.merge_rewrite(r1["rewrite"], r2["mask"], r2["rewrite"])
+            new_rule = TF.create_standard_rule(new_inports, new_match, new_outports, new_mask, new_rewrite)
+            return new_rule
 
     # rewrite first match to compare with second match
     @staticmethod
@@ -248,11 +252,11 @@ class TF(object):
     
     @staticmethod
     def merge_mask(mask1, mask2):
-        wildcard_and(mask1, mask2)
+        return wildcard_and(mask1, mask2)
 
     @staticmethod
     def merge_rewrite(rw1, mask2, rw2):
-        wildcard_rewrite(rw1, mask2, rw2)
+        return wildcard_rewrite(rw1, mask2, rw2)[0]
         
     
     @staticmethod

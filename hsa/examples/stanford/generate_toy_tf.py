@@ -243,15 +243,18 @@ for switch_name in h_switches:
 
 print switch_tfs
 # output HSA tf results:
+"""
 for rtrname in switch_tfs:
     print "==============", rtrname, "=============="
     print switch_tfs[rtrname]
+"""
 
 # merge based on pipeline
 merged_tf = switch_tfs[pipeline[0]]
 for i in range(1, len(pipeline)):
     switch = switch_tfs[pipeline[i]]
     merged_tf = TF.merge_tfs(merged_tf, switch, pipeline_ports[i - 1])
+    print "Merged TF:"
+    print merged_tf
 
-print merged_tf
 
