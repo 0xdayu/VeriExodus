@@ -17,6 +17,8 @@ from utils.hs_hash_table import hs_hash_table
 import json
 import array
 
+CTLR_PORT = 65535
+
 class TF(object):
     '''
     models a box transfer function, a network transfer function or a
@@ -193,9 +195,16 @@ class TF(object):
         rtf = TF(tf1.length)
         
         for r1 in tf1.rules:
+            # goes to controller? copy over directly
+            if CTLR_PORT in r1["out_ports"]:
+                ctlr_rule = TF.create_standard_rule(list(r1["in_ports"]), wildcard_copy(r1["match"]), \
+                                                    [CTLR_PORT], wildcard_copy(r1["mask"]), wildcard_copy(r1["rewrite"]))
+                rtf.add_rewrite_rule(ctlr_rule)
+                
+            # merge with second router's rules
             for r2 in tf2.rules:
                 newrule = TF.merge_rule(r1, r2, port_mapper)
-                if (newrule != None):
+                if newrule != None:
                     rtf.add_rewrite_rule(newrule)
 
         return rtf

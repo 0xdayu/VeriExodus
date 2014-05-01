@@ -308,6 +308,7 @@ tfile.close()
 
 # merge based on pipeline
 merged_tf = merge_tfs(switch_tfs, pipeline, pipeline_ports)
+print merged_tf
 
 
 
