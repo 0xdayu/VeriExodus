@@ -229,9 +229,6 @@ class TF(object):
     # returns subset match of outer matching on inner
     @staticmethod
     def is_match(outer, inner):
-        print outer
-        print inner
-        print (wildcard_intersect(outer, inner))
         return len(wildcard_intersect(outer, inner)) > 0
     
     @staticmethod
@@ -482,14 +479,10 @@ class TF(object):
                wildcard_is_equal(rule["rewrite"], r["rewrite"]) and \
                set(rule["out_ports"]) == set(r["out_ports"]):
                 
-                print (r["in_ports"]), (rule["in_ports"])
                 if len(r["in_ports"]) == 0 or len(rule["in_ports"]) == 0:
                     r["in_ports"] = []
                 else:
-                    print(r["in_ports"])
-                    print(rule["in_ports"])
                     r["in_ports"] = list(set(r["in_ports"]).union(rule["in_ports"]))
-                    print r["in_ports"]
                 
                 # don't add, already merged with existing rule
                 return

@@ -193,96 +193,111 @@ formatt["length"] = 30
 
 switch_tfs = dict()
 
-# convert h_switches to tfs
-for switch_name in h_switches:
-    switch = h_switches[switch_name]
-    tf = TF(formatt["length"])
-    
-    # convert match rules
-    for rule in switch.table_rows:
-        outports = list()
-        match   = wildcard_create_bit_repeat(formatt["length"], 0x3)
-        mask    = wildcard_create_bit_repeat(formatt["length"], 0x2)
-        rewrite = wildcard_create_bit_repeat(formatt["length"], 0x1)
+def convert_switches_to_tfs(h_switches, formatt):
+    # convert h_switches to tfs
+    for switch_name in h_switches:
+        switch = h_switches[switch_name]
+        tf = TF(formatt["length"])
         
-        # create "match" by piecing together requirements
-        # "dl_src", "dl_dst", 
-        fields = {                          \
-            "dl_src": "dl_src",             \
-            "dl_dst": "dl_dst",             \
-            "ethertype": "dl_proto",        \
-            "nw_src": "ip_src",             \
-            "nw_dst": "ip_dst",             \
-            "tp_dst": "transport_dst",      \
-            "protocol": "ip_proto"          \
-        }
-        for pktFieldName, hsaFieldName in fields.iteritems():
-            val = getattr(rule, pktFieldName)
-            if val is not None:
-                # this field has non-wildcard bits
-                if (isinstance(val, str) and is_ip_subnet(val)):
-                    [intIp, intSubnet] = dotted_subnet_to_int(val)
-                    set_header_field(formatt, match, hsaFieldName, intIp, 32 - intSubnet)
-                elif (isinstance(val, str) and is_ip_address(val)):
-                    intIp = dotted_ip_to_int(val)
-                    set_header_field(formatt, match, hsaFieldName, intIp, 0)
-                elif (isinstance(val, str) and is_mac_address(val)):
-                    intMac = mac_to_int(val)
-                    set_header_field(formatt, match, hsaFieldName, intMac, 0)
-                else:
-                    # port or protocol
-                    set_header_field(formatt, match, hsaFieldName, val, 0)
+        # convert match rules
+        for rule in switch.table_rows:
+            outports = list()
+            match   = wildcard_create_bit_repeat(formatt["length"], 0x3)
+            mask    = wildcard_create_bit_repeat(formatt["length"], 0x2)
+            rewrite = wildcard_create_bit_repeat(formatt["length"], 0x1)
             
-        for action in rule.act_list:
-            # get out-ports
-            if (action.act_enum == OpenFlowSwitch.Action.ACTION_FORWARD):
-                outports.append(int(action.out_port))
-
-            # TODO: dl modifications
-            if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_SRC):
-                new_mask = wildcard_create_bit_repeat(formatt["dl_src_len"], 0x01)
-                set_wildcard_field(formatt, mask, "dl_src", new_mask, 0)
-                set_header_field(formatt, rewrite, "dl_src", mac_to_int(action.new_value), 0)
-            if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_DST):
-                new_mask = wildcard_create_bit_repeat(formatt["dl_dst_len"], 0x01)
-                set_wildcard_field(formatt, mask, "dl_dst", new_mask, 0)
-                set_header_field(formatt, rewrite, "dl_dst", mac_to_int(action.new_value), 0)
+            # create "match" by piecing together requirements
+            # "dl_src", "dl_dst", 
+            fields = {                          \
+                "dl_src": "dl_src",             \
+                "dl_dst": "dl_dst",             \
+                "ethertype": "dl_proto",        \
+                "nw_src": "ip_src",             \
+                "nw_dst": "ip_dst",             \
+                "tp_dst": "transport_dst",      \
+                "protocol": "ip_proto"          \
+            }
+            for pktFieldName, hsaFieldName in fields.iteritems():
+                val = getattr(rule, pktFieldName)
+                if val is not None:
+                    # this field has non-wildcard bits
+                    if (isinstance(val, str) and is_ip_subnet(val)):
+                        [intIp, intSubnet] = dotted_subnet_to_int(val)
+                        set_header_field(formatt, match, hsaFieldName, intIp, 32 - intSubnet)
+                    elif (isinstance(val, str) and is_ip_address(val)):
+                        intIp = dotted_ip_to_int(val)
+                        set_header_field(formatt, match, hsaFieldName, intIp, 0)
+                    elif (isinstance(val, str) and is_mac_address(val)):
+                        intMac = mac_to_int(val)
+                        set_header_field(formatt, match, hsaFieldName, intMac, 0)
+                    else:
+                        # port or protocol
+                        set_header_field(formatt, match, hsaFieldName, val, 0)
                 
-            if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_NW_SRC):
-                new_mask = wildcard_create_bit_repeat(formatt["ip_src_len"], 0x01)
-                if is_ip_subnet(action.new_value):
-                    intSubnet, intMask = dotted_subnet_to_int(action.new_value)
-                    set_wildcard_field(formatt, mask, "ip_src", new_mask, 32 - intMask)
-                    set_header_field(formatt, rewrite, "ip_src", intSubnet, 32 - intMask)
-                else:
-                    set_header_field(formatt, rewrite, "ip_src", dotted_ip_to_int(action.new_value), 0)
+            for action in rule.act_list:
+                # get out-ports
+                if (action.act_enum == OpenFlowSwitch.Action.ACTION_FORWARD):
+                    outports.append(int(action.out_port))
 
-            if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_NW_DST):
-                new_mask = wildcard_create_bit_repeat(formatt["ip_dst_len"], 0x01)
-                if is_ip_subnet(action.new_value):
-                    intSubnet, intMask = dotted_subnet_to_int(action.new_value)
-                    set_wildcard_field(formatt, mask, "ip_dst", new_mask, 32 - intMask)
-                    set_header_field(formatt, rewrite, "ip_dst", intSubnet, 32 - intMask)
-                else:
-                    set_header_field(formatt, rewrite, "ip_dst", dotted_ip_to_int(action.new_value), 0)
+                # TODO: dl modifications
+                if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_SRC):
+                    new_mask = wildcard_create_bit_repeat(formatt["dl_src_len"], 0x01)
+                    set_wildcard_field(formatt, mask, "dl_src", new_mask, 0)
+                    set_header_field(formatt, rewrite, "dl_src", mac_to_int(action.new_value), 0)
+                if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_DST):
+                    new_mask = wildcard_create_bit_repeat(formatt["dl_dst_len"], 0x01)
+                    set_wildcard_field(formatt, mask, "dl_dst", new_mask, 0)
+                    set_header_field(formatt, rewrite, "dl_dst", mac_to_int(action.new_value), 0)
+                    
+                if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_NW_SRC):
+                    new_mask = wildcard_create_bit_repeat(formatt["ip_src_len"], 0x01)
+                    if is_ip_subnet(action.new_value):
+                        intSubnet, intMask = dotted_subnet_to_int(action.new_value)
+                        set_wildcard_field(formatt, mask, "ip_src", new_mask, 32 - intMask)
+                        set_header_field(formatt, rewrite, "ip_src", intSubnet, 32 - intMask)
+                    else:
+                        set_header_field(formatt, rewrite, "ip_src", dotted_ip_to_int(action.new_value), 0)
 
-            # sending to controller
-            if (action.act_enum == OpenFlowSwitch.Action.ACTION_TO_CTRL):
-                outports.append(65535)
+                if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_NW_DST):
+                    new_mask = wildcard_create_bit_repeat(formatt["ip_dst_len"], 0x01)
+                    if is_ip_subnet(action.new_value):
+                        intSubnet, intMask = dotted_subnet_to_int(action.new_value)
+                        set_wildcard_field(formatt, mask, "ip_dst", new_mask, 32 - intMask)
+                        set_header_field(formatt, rewrite, "ip_dst", intSubnet, 32 - intMask)
+                    else:
+                        set_header_field(formatt, rewrite, "ip_dst", dotted_ip_to_int(action.new_value), 0)
 
-        if (rule.in_port is None):
-            inports = []
-        else:
-            inports = [int(rule.in_port)]
+                # sending to controller
+                if (action.act_enum == OpenFlowSwitch.Action.ACTION_TO_CTRL):
+                    outports.append(65535)
 
-        converted_rule = TF.create_standard_rule(inports, match, outports, mask, rewrite)
-        tf.add_rewrite_rule(converted_rule)
+            if (rule.in_port is None):
+                inports = []
+            else:
+                inports = [int(rule.in_port)]
+
+            converted_rule = TF.create_standard_rule(inports, match, outports, mask, rewrite)
+            tf.add_rewrite_rule(converted_rule)
+        
+        # complete tf:
+        switch_tfs[switch_name] = tf
+
+    return switch_tfs
     
-    # complete tf:
-    switch_tfs[switch_name] = tf
-    
+def merge_tfs(tfs, pipeline, pipeline_ports):
+    # merge based on pipeline
+    merged_tf = switch_tfs[pipeline[0]]
+    for i in range(1, 2):#, len(pipeline)):
+        switch = switch_tfs[pipeline[i]]
+        merged_tf = TF.merge_tfs(merged_tf, switch, pipeline_ports[i - 1])
 
+    return merged_tf
+
+
+
+switch_tfs = convert_switches_to_tfs(h_switches, formatt)
 print switch_tfs
+
 # output HSA tf results:
 tfile = open("switch_tfs", "w")
 for rtrname in switch_tfs:
@@ -292,12 +307,7 @@ for rtrname in switch_tfs:
 tfile.close()
 
 # merge based on pipeline
-merged_tf = switch_tfs[pipeline[0]]
-for i in range(1, 2):#, len(pipeline)):
-    switch = switch_tfs[pipeline[i]]
-    merged_tf = TF.merge_tfs(merged_tf, switch, pipeline_ports[i - 1])
-    print "Merged TF:"
-    print merged_tf
+merged_tf = merge_tfs(switch_tfs, pipeline, pipeline_ports)
 
 
 
