@@ -205,6 +205,7 @@ def convert_switches_to_tfs(h_switches, formatt):
             match   = wildcard_create_bit_repeat(formatt["length"], 0x3)
             mask    = wildcard_create_bit_repeat(formatt["length"], 0x2)
             rewrite = wildcard_create_bit_repeat(formatt["length"], 0x1)
+            action_all = False
             
             # create "match" by piecing together requirements
             # "dl_src", "dl_dst", 
@@ -217,6 +218,8 @@ def convert_switches_to_tfs(h_switches, formatt):
                 "tp_dst": "transport_dst",      \
                 "protocol": "ip_proto"          \
             }
+
+            # parse field names into "match"
             for pktFieldName, hsaFieldName in fields.iteritems():
                 val = getattr(rule, pktFieldName)
                 if val is not None:
@@ -234,22 +237,22 @@ def convert_switches_to_tfs(h_switches, formatt):
                         # port or protocol
                         set_header_field(formatt, match, hsaFieldName, val, 0)
                 
+            # parse actions into mask/rewrite/outport
             for action in rule.act_list:
                 # get out-ports
-                if (action.act_enum == OpenFlowSwitch.Action.ACTION_FORWARD):
+                if action.act_enum == OpenFlowSwitch.Action.ACTION_FORWARD:
                     outports.append(int(action.out_port))
 
-                # TODO: dl modifications
-                if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_SRC):
+                if action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_SRC:
                     new_mask = wildcard_create_bit_repeat(formatt["dl_src_len"], 0x01)
                     set_wildcard_field(formatt, mask, "dl_src", new_mask, 0)
                     set_header_field(formatt, rewrite, "dl_src", mac_to_int(action.new_value), 0)
-                if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_DST):
+                if action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_DL_DST:
                     new_mask = wildcard_create_bit_repeat(formatt["dl_dst_len"], 0x01)
                     set_wildcard_field(formatt, mask, "dl_dst", new_mask, 0)
                     set_header_field(formatt, rewrite, "dl_dst", mac_to_int(action.new_value), 0)
                     
-                if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_NW_SRC):
+                if action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_NW_SRC:
                     new_mask = wildcard_create_bit_repeat(formatt["ip_src_len"], 0x01)
                     if is_ip_subnet(action.new_value):
                         intSubnet, intMask = dotted_subnet_to_int(action.new_value)
@@ -258,7 +261,7 @@ def convert_switches_to_tfs(h_switches, formatt):
                     else:
                         set_header_field(formatt, rewrite, "ip_src", dotted_ip_to_int(action.new_value), 0)
 
-                if (action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_NW_DST):
+                if action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_NW_DST:
                     new_mask = wildcard_create_bit_repeat(formatt["ip_dst_len"], 0x01)
                     if is_ip_subnet(action.new_value):
                         intSubnet, intMask = dotted_subnet_to_int(action.new_value)
@@ -266,9 +269,12 @@ def convert_switches_to_tfs(h_switches, formatt):
                         set_header_field(formatt, rewrite, "ip_dst", intSubnet, 32 - intMask)
                     else:
                         set_header_field(formatt, rewrite, "ip_dst", dotted_ip_to_int(action.new_value), 0)
+                
+                if action.act_enum == OpenFlowSwitch.Action.ACTION_ALL:
+                    action_all = True
 
                 # sending to controller
-                if (action.act_enum == OpenFlowSwitch.Action.ACTION_TO_CTRL):
+                if action.act_enum == OpenFlowSwitch.Action.ACTION_TO_CTRL:
                     outports.append(65535)
 
             if (rule.in_port is None):
@@ -277,6 +283,7 @@ def convert_switches_to_tfs(h_switches, formatt):
                 inports = [int(rule.in_port)]
 
             converted_rule = TF.create_standard_rule(inports, match, outports, mask, rewrite)
+            converted_rule["action_all"] = action_all
             tf.add_rewrite_rule(converted_rule)
         
         # complete tf:

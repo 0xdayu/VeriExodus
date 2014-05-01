@@ -217,9 +217,15 @@ class TF(object):
         new_tf = TF(r1["match"].length)
         rewritten_match = TF.rewrite_hsa(r1["match"], r1["mask"], r1["rewrite"])
         
-        # either inport -> outport or inport is all packets
-        if (len(outport.intersection(inport)) > 0 or len(inport) == 0) and \
-                TF.is_match(rewritten_match, r2["match"]):
+        rules_match = TF.is_match(rewritten_match, r2["match"])
+        if r1["action_all"]:
+            r2_inport  = set(map(port_mapper, r1["in_ports"]))      # these in ports are not allowed
+            rules_match = rules_match and len(inport - r2_inport) > 0
+        else:
+            # either inport -> outport, or inport is all packets,
+            rules_match = rules_match and (len(outport.intersection(inport)) > 0 or len(inport) == 0)
+        
+        if rules_match:
             # merge r1 and r2
             new_inports  = r1["in_ports"]
             new_match    = TF.merge_match(r1["match"], r1["mask"], r1["rewrite"], r2["match"])
@@ -227,6 +233,10 @@ class TF(object):
             new_mask     = TF.merge_mask(r1["mask"], r2["mask"])
             new_rewrite  = TF.merge_rewrite(r1["rewrite"], r2["mask"], r2["rewrite"])
             new_rule = TF.create_standard_rule(new_inports, new_match, new_outports, new_mask, new_rewrite)
+            
+            if r1["action_all"]:
+                new_rule["action_all"] = True
+            
             return new_rule
 
     # rewrite first match to compare with second match
