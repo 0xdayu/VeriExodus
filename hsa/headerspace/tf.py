@@ -218,7 +218,7 @@ class TF(object):
         rewritten_match = TF.rewrite_hsa(r1["match"], r1["mask"], r1["rewrite"])
         
         rules_match = TF.is_match(rewritten_match, r2["match"])
-        if r1["action_all"]:
+        if "action_all" in r1 and r1["action_all"]:
             r2_inport  = set(map(port_mapper, r1["in_ports"]))      # these in ports are not allowed
             rules_match = rules_match and len(inport - r2_inport) > 0
         else:
@@ -234,7 +234,7 @@ class TF(object):
             new_rewrite  = TF.merge_rewrite(r1["rewrite"], r2["mask"], r2["rewrite"])
             new_rule = TF.create_standard_rule(new_inports, new_match, new_outports, new_mask, new_rewrite)
             
-            if r1["action_all"]:
+            if "action_all" in r1 and r1["action_all"]:
                 new_rule["action_all"] = True
             
             return new_rule

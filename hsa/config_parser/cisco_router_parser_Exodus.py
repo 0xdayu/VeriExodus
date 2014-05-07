@@ -31,6 +31,11 @@ class cisco_router(object):
         self.arp_table = {}
         # mapping of ACLs to interfaces access-list# --> (interface, in/out, file, line)
         self.acl_iface = {}
+
+        # interfaces without "in" ACLs
+        self.ifaces_wo_in = []
+        # interfaces without "out" ACLs
+        self.ifaces_wo_out = []
         
         # interface name -> mac
         self.iface_mac = {}
@@ -300,6 +305,9 @@ class cisco_router(object):
         iface_decl = iface_info[0][0].split()
         iface = iface_decl[1]
 
+        has_in  = False
+        has_out = False
+
         for (line, line_counter) in iface_info:
             if line.startswith("ip access-group"):
                 tokens = line.split()
@@ -309,6 +317,15 @@ class cisco_router(object):
                     self.acl_iface[acl_num] = []
                 self.acl_iface[acl_num].append((iface, tokens[3], file_path, [line_counter]))
 
+                if tokens[3].lower() == "in":
+                    has_in  = has_in or True
+                if tokens[3].lower() == "out":
+                    has_out = has_out or True
+
+        if not has_in:
+            self.ifaces_wo_in.append(iface)
+        if not has_out:
+            self.ifaces_wo_out.append(iface)
     
     def read_config_file(self, file_path):
         print "=== Reading Cisco Router Config File ==="
@@ -389,6 +406,60 @@ class cisco_router(object):
         print "=== DONE Reading Cisco ARP Table File ==="
         
     def generate_transfer_function(self):
+        def generate_acl_tf(direction, bypass_ifaces):
+            tf_acl = TF(self.hs_format["length"])
+            for acl_num in self.acl:
+                acl_rules = self.acl[acl_num]
+    
+                # make a tf rule for each acl rule
+                for rule in acl_rules:
+                    match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
+                    mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
+                    rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
+    
+                    # permit/deny
+                    if rule["action"]:
+                        outports = [1]
+                    else:
+                        outports = []
+                    
+                    # PROTOCOLS
+                    if rule["etherType"] != NO_ETHERTYPE:
+                        set_header_field(self.hs_format, match, "dl_proto", rule["etherType"], 0)
+                    if rule["ip_protocol"]:
+                        set_header_field(self.hs_format, match, "ip_proto", rule["ip_protocol"], 0)
+    
+                    # IPS
+                    set_masked(match, "ip_src", rule["src_ip_mask"], rule["src_ip"])
+                    set_masked(match, "ip_dst", rule["dst_ip_mask"], rule["dst_ip"])
+    
+                    # TRANSPORT_PORT
+                    set_range(match, "transport_src", rule["transport_src_begin"], rule["transport_src_end"])
+                    set_range(match, "transport_dst", rule["transport_dst_begin"], rule["transport_dst_end"])
+    
+                    set_range(match, "transport_ctrl", rule["transport_ctrl_begin"], rule["transport_ctrl_end"])
+                
+                    # get inports through interfaces
+                    inports = []
+                    for iface_info in self.acl_iface[acl_num]:
+                        if iface_info[1] == direction:
+                            inports.append(self.get_port_id(iface_info[0]))
+    
+                    tfrule = TF.create_standard_rule(inports, match, outports, mask, rewrite)
+                    tf_acl.add_rewrite_rule(tfrule)
+
+            # add interfaces without in, let them bypass
+            for iface in bypass_ifaces:
+                iport = self.get_port_id(iface)
+                match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
+                mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
+                rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
+
+                tfrule = TF.create_standard_rule([iport], match, [iport], mask, rewrite)
+                tf_acl.add_rewrite_rule(tfrule)
+
+            return tf_acl
+
         def set_range(wc, fieldname, start, end):
             if start == 0 and end == 65535:
                 pass
@@ -401,49 +472,10 @@ class cisco_router(object):
                 set_header_field(self.hs_format, wc, fieldname, val, 0)
             # TODO: handle variable masks
         
-        ############### ACL
-        tf = TF(self.hs_format["length"])
-        for acl_num in self.acl:
-            acl_rules = self.acl[acl_num]
+        #-------------------------- IN ACL --------------------------
+        tf_in_acl = generate_acl_tf("in", self.ifaces_wo_in)
 
-            # make a tf rule for each acl rule
-            for rule in acl_rules:
-                match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
-                mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
-                rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
-
-                # permit/deny
-                if rule["action"]:
-                    outports = [1]
-                else:
-                    outports = []
-                
-                ############ PROTOCOLS
-                if rule["etherType"] != NO_ETHERTYPE:
-                    set_header_field(self.hs_format, match, "dl_proto", rule["etherType"], 0)
-                if rule["ip_protocol"]:
-                    set_header_field(self.hs_format, match, "ip_proto", rule["ip_protocol"], 0)
-
-                ############ IPS
-                # TODO: src_ip_mask/dst_ip_mask
-                set_masked(match, "ip_src", rule["src_ip_mask"], rule["src_ip"])
-                set_masked(match, "ip_dst", rule["dst_ip_mask"], rule["dst_ip"])
-
-                ############ TRANSPORT_PORT
-                set_range(match, "transport_src", rule["transport_src_begin"], rule["transport_src_end"])
-                set_range(match, "transport_dst", rule["transport_dst_begin"], rule["transport_dst_end"])
-
-                set_range(match, "transport_ctrl", rule["transport_ctrl_begin"], rule["transport_ctrl_end"])
-                
-                # get inports through interfaces
-                inports = []
-                for iface_info in self.acl_iface[acl_num]:
-                    inports.append(self.get_port_id(iface_info[0]))
-
-                tfrule = TF.create_standard_rule(inports, match, outports, mask, rewrite)
-                tf.add_rewrite_rule(tfrule)
-
-        # TODO: static routing
+        #----------------------- STATIC ROUTING -----------------------
         tf_rtr = TF(self.hs_format["length"])
         for subnet in self.routes:
             for route in self.routes[subnet]:
@@ -467,17 +499,17 @@ class cisco_router(object):
                 
                 # make one rule for each destination ip
                 if route[0].lower() == "attached":
-                    subnetMask = (1 << subnetMask) - 1
+                    subnetMask = ((1 << subnetMask) - 1) << (32 - subnetMask)
                     for ip in self.arp_table:
                         if dotted_ip_to_int(ip) & subnetMask == subnetIp & subnetMask:
                             newmask    = wildcard_copy(mask)
                             newrewrite = wildcard_copy(rewrite)
                             
-                            newmask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
-                            set_wildcard_field(self.hs_format, mask, "dl_dst", newmask, 0)
+                            replacemask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
+                            set_wildcard_field(self.hs_format, newmask, "dl_dst", replacemask, 0)
                             
                             macaddr = self.arp_table[ip]
-                            set_header_field(self.hs_format, rewrite, "dl_dst", macaddr, 0)
+                            set_header_field(self.hs_format, newrewrite, "dl_dst", macaddr, 0)
     
                             tfrule = TF.create_standard_rule(inports, match, outports, newmask, newrewrite)
                             tf_rtr.add_rewrite_rule(tfrule)
@@ -486,21 +518,36 @@ class cisco_router(object):
                     newrewrite = wildcard_copy(rewrite)
 
                     replacemask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
-                    set_wildcard_field(self.hs_format, mask, "dl_dst", replacemask, 0)
+                    set_wildcard_field(self.hs_format, newmask, "dl_dst", replacemask, 0)
                     
+                    # get MAC of next hop
                     macaddr = self.arp_table[route[0]]
-                    set_header_field(self.hs_format, rewrite, "dl_dst", macaddr, 0)
+                    set_header_field(self.hs_format, newrewrite, "dl_dst", macaddr, 0)
     
                     tfrule = TF.create_standard_rule(inports, match, outports, newmask, newrewrite)
                     tf_rtr.add_rewrite_rule(tfrule)
-                    print "next hop: ", 
-                    print tf_rtr
                     
-        print tf_rtr
-        #tf = TF.merge_tfs(tf, tf_rtr)
-        
-        return tf
+        #-------------------------- OUT ACL --------------------------
+        tf_out_acl = generate_acl_tf("out", self.ifaces_wo_out)
 
+        
+        #--------------------------- MERGE ---------------------------
+        tf_inacl_rtr = TF.merge_tfs(tf_in_acl, tf_rtr, TF.id_port_mapper)
+        tf_full = tf_inacl_rtr
+
+        write_file('tf_in_acl', tf_in_acl)
+        write_file('tf_rtr', tf_rtr)
+        write_file('tf_out_acl', tf_out_acl)
+        write_file('tf_inacl_rtr', tf_inacl_rtr)
+
+        #tf_full = TF.merge_tfs(tf_acl_rtr, tf_out_acl, TF.id_port_mapper)
+
+        return tf_full
+
+def write_file(fname, tf):
+    f = open(fname, 'w')
+    f.write(str(tf))
+    f.close()
         
 if __name__ == "__main__":
     cs = cisco_router(1)
@@ -514,4 +561,8 @@ if __name__ == "__main__":
     #cs.read_mac_table_file("../examples/Exodus_toy_example/toy_example/ext_hardware_info.txt");
 
     tf = cs.generate_transfer_function()
-    #print tf
+    f = open('result_tf.txt', 'w')
+    f.write(str(tf))
+    f.close()
+
+
