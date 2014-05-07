@@ -1,12 +1,4 @@
-// Startup state
-// EXT router (talk-outerfw.txt)
-// Run from commit: 6918953f9fd635a39852f1541c56d9dc15bc0c08
-// Generated May 6 2014 tn
-/////////////////////////////
-
-
-
-mininet> dpctl dump-flows --rsort
+mininet
 *** ext-rtr ------------------------------------------------------------------------
  cookie=0x0, duration=7.559s, table=0, n_packets=0, n_bytes=0, priority=65535,ip,nw_dst=10.200.0.0/16 actions=mod_dl_src:ca:fe:00:01:00:02,output:3
  cookie=0x0, duration=7.559s, table=0, n_packets=0, n_bytes=0, priority=65535,arp,dl_src=00:00:ca:fe:ca:fe actions=ALL

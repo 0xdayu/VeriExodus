@@ -545,6 +545,12 @@ class cisco_router(object):
         #--------------------------- MERGE ---------------------------
         tf_inacl_rtr = TF.merge_tfs(tf_in_acl, tf_rtr, TF.id_port_mapper)
         tf_full = TF.merge_tfs(tf_inacl_rtr, tf_out_acl, TF.id_port_mapper)
+        
+        # add implicit all drop
+        match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
+        mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
+        rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
+        tf_full.add_rewrite_rule(TF.create_standard_rule([], match, [], mask, rewrite))
 
         write_file('tf_in_acl', tf_in_acl)
         write_file('tf_rtr', tf_rtr)
