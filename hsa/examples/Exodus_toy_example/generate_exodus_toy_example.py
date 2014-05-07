@@ -295,16 +295,19 @@ def convert_switches_to_tfs(h_switches, formatt):
 def merge_tfs(tfs, pipeline, pipeline_ports):
     # merge based on pipeline
     merged_tf = switch_tfs[pipeline[0]]
-    for i in range(1, 2):#, len(pipeline)):
+    for i in range(1, len(pipeline)):
         switch = switch_tfs[pipeline[i]]
         merged_tf = TF.merge_tfs(merged_tf, switch, pipeline_ports[i - 1])
+
+        f = open("merge_" + str(i), 'w')
+        f.write(str(merged_tf))
+        f.close()
 
     return merged_tf
 
 
 
 switch_tfs = convert_switches_to_tfs(h_switches, formatt)
-print switch_tfs
 
 # output HSA tf results:
 tfile = open("switch_tfs", "w")
@@ -316,7 +319,10 @@ tfile.close()
 
 # merge based on pipeline
 merged_tf = merge_tfs(switch_tfs, pipeline, pipeline_ports)
-print merged_tf
+f = open('of_tf_result', 'w')
+f.write(str(merged_tf))
+f.close()
+
 
 
 

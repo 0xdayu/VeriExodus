@@ -1,7 +1,6 @@
 mininet
 *** ext-rtr ------------------------------------------------------------------------
  cookie=0x0, duration=7.559s, table=0, n_packets=0, n_bytes=0, priority=65535,ip,nw_dst=10.200.0.0/16 actions=mod_dl_src:ca:fe:00:01:00:02,output:3
- cookie=0x0, duration=7.559s, table=0, n_packets=0, n_bytes=0, priority=65535,arp,dl_src=00:00:ca:fe:ca:fe actions=ALL
  cookie=0x0, duration=7.559s, table=0, n_packets=0, n_bytes=0, priority=65535,ip,nw_dst=10.1.1.0/24 actions=mod_dl_src:ca:fe:00:01:00:01,output:2
  cookie=0x0, duration=7.559s, table=0, n_packets=0, n_bytes=0, priority=65534,arp actions=CONTROLLER:65535
  cookie=0x0, duration=7.559s, table=0, n_packets=0, n_bytes=0, priority=65533 actions=drop
@@ -29,7 +28,6 @@ mininet
  cookie=0x0, duration=7.277s, table=0, n_packets=0, n_bytes=0, priority=65534,tcp,in_port=1,nw_src=10.1.1.1,tp_dst=80 actions=output:2
  cookie=0x0, duration=7.277s, table=0, n_packets=0, n_bytes=0, priority=65533 actions=drop
 *** rs1 ------------------------------------------------------------------------
- cookie=0x0, duration=7.217s, table=0, n_packets=0, n_bytes=0, priority=65535,arp,dl_src=00:00:ca:fe:ca:fe actions=ALL
  cookie=0x0, duration=7.217s, table=0, n_packets=0, n_bytes=0, priority=65534,arp actions=CONTROLLER:65535
  cookie=0x0, duration=7.217s, table=0, n_packets=0, n_bytes=0, priority=65533,dl_dst=33:33:00:00:00:fb actions=drop
  cookie=0x0, duration=7.217s, table=0, n_packets=0, n_bytes=0, priority=65533,dl_dst=01:00:5e:00:00:16 actions=drop
