@@ -2,10 +2,11 @@ hostname ext
 !
 interface out_dmz
 ip access-group 103 in
+ip access-group 104 out
 ip address 10.1.1.2 255.255.255.0
 !
 interface out_inet
-ip access-group 104 in
+ip access-group 104 out
 ip address 10.200.1.1 255.255.0.0
 !
 access-list 104 deny 10.200.200.200
@@ -23,7 +24,9 @@ access-list 103 permit tcp host 10.1.1.1 any eq 22
 access-list 103 deny any
 !
 ip access-list standard test1
+permit 1.1.1.1 0.0.0.255
+deny host 2.2.2.2
 !
-ip access-list extend test2
+ip access-list extended test2
 !
 end

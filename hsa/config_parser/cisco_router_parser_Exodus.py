@@ -240,14 +240,14 @@ class cisco_router(object):
       
         # extended access-list entry
         else:
+            new_entry["ip_protocol"] = 0
+            new_entry["etherType"] = 0x0800
+
             if self.get_protocol_number(tokens[0]) != None:
                 new_entry["ip_protocol"] = self.get_protocol_number(\
                     self.get_protocol_number(tokens.pop(0)))
-            elif is_ip_address(tokens[0]):
-                new_entry["ip_protocol"] = 0
-                new_entry["etherType"] = 0x0800
-            else:
-                return False
+            #else:
+            #    return False
             
             # src ip address and ip mask
             new_ip = parse_ip(tokens)
@@ -341,15 +341,18 @@ class cisco_router(object):
             # read an access-list line 
             if line.startswith("access-list"):
                 reading_ipacl = False
+                reading_iface = True
                 self.parse_access_list_entry(line,line_counter, int(line.split()[1]) < 100)
             elif line.startswith("ip access-list"):
                 reading_ipacl = True
+                reading_iface = False
                 ipacl_start = (line.split())[3]
                 if ((line.split())[2] == "standard"):
                     ipacl_std = True
                 else:
                     ipacl_std = False
-            elif reading_ipacl and (line.lstrip().startswith("permit") or line.lstrip().startswith("deny")):
+
+            elif reading_ipacl and (line.startswith("permit") or line.startswith("deny")):
                 entry = "access-list %s %s" % (ipacl_start, line);
                 self.parse_access_list_entry(entry,line_counter, ipacl_std)
                 
@@ -361,6 +364,7 @@ class cisco_router(object):
             elif reading_iface:
                 iface_info.append((line,line_counter))
                 if line.startswith("!"):
+                    reading_ipacl = False
                     reading_iface = False
                     self.parse_interface_config(iface_info,file_path)
                 line_counter = line_counter + 1
@@ -410,18 +414,26 @@ class cisco_router(object):
             tf_acl = TF(self.hs_format["length"])
             for acl_num in self.acl:
                 acl_rules = self.acl[acl_num]
-    
+                
+                # current acl not used on any interfaces
+                if acl_num not in self.acl_iface:
+                    continue
+                
+                # get inports through interfaces
+                inports = set()
+                for iface_info in self.acl_iface[acl_num]:
+                    if iface_info[1] == direction:
+                        inports.add(self.get_port_id(iface_info[0]))
+                if len(inports) == 0:
+                    continue
+
+                inports = list(inports)
+
                 # make a tf rule for each acl rule
                 for rule in acl_rules:
                     match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
                     mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
                     rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
-    
-                    # permit/deny
-                    if rule["action"]:
-                        outports = [1]
-                    else:
-                        outports = []
                     
                     # PROTOCOLS
                     if rule["etherType"] != NO_ETHERTYPE:
@@ -438,16 +450,17 @@ class cisco_router(object):
                     set_range(match, "transport_dst", rule["transport_dst_begin"], rule["transport_dst_end"])
     
                     set_range(match, "transport_ctrl", rule["transport_ctrl_begin"], rule["transport_ctrl_end"])
-                
-                    # get inports through interfaces
-                    inports = []
-                    for iface_info in self.acl_iface[acl_num]:
-                        if iface_info[1] == direction:
-                            inports.append(self.get_port_id(iface_info[0]))
     
-                    tfrule = TF.create_standard_rule(inports, match, outports, mask, rewrite)
-                    tf_acl.add_rewrite_rule(tfrule)
-
+                    if rule["action"]:
+                        # permit
+                        for i in inports:
+                            tfrule = TF.create_standard_rule([i], match, [i], mask, rewrite)
+                            tf_acl.add_rewrite_rule(tfrule)
+                    else:
+                        # deny
+                        tfrule = TF.create_standard_rule(inports, match, [], mask, rewrite)
+                        tf_acl.add_rewrite_rule(tfrule)
+    
             # add interfaces without in, let them bypass
             for iface in bypass_ifaces:
                 iport = self.get_port_id(iface)
@@ -468,9 +481,7 @@ class cisco_router(object):
             # TODO: handle ranges
         
         def set_masked(wc, fieldname, mask, val):
-            if mask == 0:
-                set_header_field(self.hs_format, wc, fieldname, val, 0)
-            # TODO: handle variable masks
+            set_header_field(self.hs_format, wc, fieldname, val, find_num_mask_bits_right_mak(mask))
         
         #-------------------------- IN ACL --------------------------
         tf_in_acl = generate_acl_tf("in", self.ifaces_wo_in)
@@ -533,14 +544,14 @@ class cisco_router(object):
         
         #--------------------------- MERGE ---------------------------
         tf_inacl_rtr = TF.merge_tfs(tf_in_acl, tf_rtr, TF.id_port_mapper)
-        tf_full = tf_inacl_rtr
+        tf_full = TF.merge_tfs(tf_inacl_rtr, tf_out_acl, TF.id_port_mapper)
 
         write_file('tf_in_acl', tf_in_acl)
         write_file('tf_rtr', tf_rtr)
         write_file('tf_out_acl', tf_out_acl)
-        write_file('tf_inacl_rtr', tf_inacl_rtr)
 
-        #tf_full = TF.merge_tfs(tf_acl_rtr, tf_out_acl, TF.id_port_mapper)
+        write_file('tf_inacl_rtr', tf_inacl_rtr)
+        write_file('tf_full', tf_full)
 
         return tf_full
 
