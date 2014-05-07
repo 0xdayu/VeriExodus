@@ -179,6 +179,7 @@ formatt["transport_ctrl_pos"] = 15
 formatt["dl_src_pos"] = 16
 formatt["dl_dst_pos"] = 22
 formatt["dl_proto_pos"] = 28
+
 formatt["vlan_len"] = 2
 formatt["ip_src_len"] = 4
 formatt["ip_dst_len"] = 4
@@ -236,7 +237,7 @@ def convert_switches_to_tfs(h_switches, formatt):
                     else:
                         # port or protocol
                         set_header_field(formatt, match, hsaFieldName, val, 0)
-                
+            
             # parse actions into mask/rewrite/outport
             for action in rule.act_list:
                 # get out-ports

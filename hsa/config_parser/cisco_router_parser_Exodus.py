@@ -19,27 +19,37 @@ from utils.helper import *
 
 import re
 
+NO_ETHERTYPE = 0
+
 class cisco_router(object):
     
     def __init__(self, switch_id):
         
         # for each acl number has a list of acl dictionary entries
         self.acl = {}
-        # forwarding table
-        self.fwd_table = []
         # arp table: ip-->(mac)
         self.arp_table = {}
-        # mac table: mac-->ports
-        self.mac_table = {}
         # mapping of ACLs to interfaces access-list# --> (interface, in/out, file, line)
         self.acl_iface = {}
+        
+        # interface name -> mac
+        self.iface_mac = {}
+
+        # TODO: not used
+        # mac table: mac-->ports
+        self.mac_table = {}
         # list of ports configured on this switch
         self.config_ports = set()
 
         self.switch_id = switch_id
         self.port_to_id = {}
         self.hs_format = self.HS_FORMAT()
+
+        self.ID = 1;
+        self.interface_ids = {}
     
+        # dict(subnet -> list of (next_hop, interface))
+        self.routes = {}
         
     @staticmethod
     def HS_FORMAT():
@@ -133,6 +143,13 @@ class cisco_router(object):
                 return num
             except Exception as e:
                 return None
+    
+    def get_port_id(self, interface):
+        if interface not in self.interface_ids:
+            self.interface_ids[interface] = self.ID
+            self.ID = self.ID + 1
+
+        return self.interface_ids[interface]
     
     def parse_access_list_entry(self, entry, line_counter, acl_standard):
         def parse_ip(lst):
@@ -280,9 +297,18 @@ class cisco_router(object):
             else:
                 return False
         
-        tokens = iface_info[0][0].split()
-        print tokens
-         
+        iface_decl = iface_info[0][0].split()
+        iface = iface_decl[1]
+
+        for (line, line_counter) in iface_info:
+            if line.startswith("ip access-group"):
+                tokens = line.split()
+                acl_num = tokens[2]
+
+                if acl_num not in self.acl_iface:
+                    self.acl_iface[acl_num] = []
+                self.acl_iface[acl_num].append((iface, tokens[3], file_path, [line_counter]))
+
     
     def read_config_file(self, file_path):
         print "=== Reading Cisco Router Config File ==="
@@ -309,7 +335,7 @@ class cisco_router(object):
             elif reading_ipacl and (line.lstrip().startswith("permit") or line.lstrip().startswith("deny")):
                 entry = "access-list %s %s" % (ipacl_start, line);
                 self.parse_access_list_entry(entry,line_counter, ipacl_std)
-          
+                
                 # read interface config
             elif line.startswith("interface"):
                 reading_ipacl = False
@@ -323,25 +349,169 @@ class cisco_router(object):
                 line_counter = line_counter + 1
         f.close()
         print "=== DONE Reading Cisco Router Config File ==="
+
+    def read_mac_table(self, file_path):
+        f = open(file_path, 'r')
+
+        lines = f.readlines()[2:]
+        for line in lines:
+            line = line.strip().split()
+            if len(line) > 0:
+                self.iface_mac[line[6]] = line[2]
+
+        f.close()
+
+    def read_route_table_file(self, file_path):
+        f = open(file_path, 'r')
+        lines = f.readlines()[1:]
+        for line in lines:
+            line = line.strip().split()
+            
+            subnet   = line[0]
+            next_hop = line[1]
+            iface    = line[2]
+
+            if subnet not in self.routes:
+                self.routes[subnet] = []
+            self.routes[subnet].append((next_hop, iface))
         
     def read_arp_table_file(self, file_path):
         print "=== Reading Cisco Router Config File ==="
+        f = open(file_path, 'r')
+        lines = f.readlines()[1:]
+        for line in lines:
+            line = line.strip().split()
+            
+            ipaddr  = line[1]
+            macaddr = line[3]
+            self.arp_table[ipaddr] = int(macaddr.replace('.', ''), 16)
+            
         print "=== DONE Reading Cisco ARP Table File ==="
         
-    def read_mac_table_file(self, file_path):
-        print "=== Reading Cisco Router Config File ==="
-        print "=== DONE Reading Cisco MAC Table File ==="
+    def generate_transfer_function(self):
+        def set_range(wc, fieldname, start, end):
+            if start == 0 and end == 65535:
+                pass
+            elif start == end:
+                set_header_field(self.hs_format, wc, fieldname, start, 0)
+            # TODO: handle ranges
         
-    def generate_transfer_function(self, tf):
-        pass
+        def set_masked(wc, fieldname, mask, val):
+            if mask == 0:
+                set_header_field(self.hs_format, wc, fieldname, val, 0)
+            # TODO: handle variable masks
+        
+        ############### ACL
+        tf = TF(self.hs_format["length"])
+        for acl_num in self.acl:
+            acl_rules = self.acl[acl_num]
+
+            # make a tf rule for each acl rule
+            for rule in acl_rules:
+                match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
+                mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
+                rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
+
+                # permit/deny
+                if rule["action"]:
+                    outports = [1]
+                else:
+                    outports = []
+                
+                ############ PROTOCOLS
+                if rule["etherType"] != NO_ETHERTYPE:
+                    set_header_field(self.hs_format, match, "dl_proto", rule["etherType"], 0)
+                if rule["ip_protocol"]:
+                    set_header_field(self.hs_format, match, "ip_proto", rule["ip_protocol"], 0)
+
+                ############ IPS
+                # TODO: src_ip_mask/dst_ip_mask
+                set_masked(match, "ip_src", rule["src_ip_mask"], rule["src_ip"])
+                set_masked(match, "ip_dst", rule["dst_ip_mask"], rule["dst_ip"])
+
+                ############ TRANSPORT_PORT
+                set_range(match, "transport_src", rule["transport_src_begin"], rule["transport_src_end"])
+                set_range(match, "transport_dst", rule["transport_dst_begin"], rule["transport_dst_end"])
+
+                set_range(match, "transport_ctrl", rule["transport_ctrl_begin"], rule["transport_ctrl_end"])
+                
+                # get inports through interfaces
+                inports = []
+                for iface_info in self.acl_iface[acl_num]:
+                    inports.append(self.get_port_id(iface_info[0]))
+
+                tfrule = TF.create_standard_rule(inports, match, outports, mask, rewrite)
+                tf.add_rewrite_rule(tfrule)
+
+        # TODO: static routing
+        tf_rtr = TF(self.hs_format["length"])
+        for subnet in self.routes:
+            for route in self.routes[subnet]:
+                inports = []
+                match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
+                mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
+                rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
+                outports = [self.get_port_id(route[1])]
+
+                # match
+                [subnetIp, subnetMask] = dotted_subnet_to_int(subnet)
+                set_header_field(self.hs_format, match, "ip_dst", subnetIp, 32 - subnetMask)
+                
+                # mask
+                newmask = wildcard_create_bit_repeat(self.hs_format["dl_src_len"], 0x1)
+                set_wildcard_field(self.hs_format, mask, "dl_src", newmask, 0)
+                
+                # rewrite
+                macaddr = int(self.iface_mac[route[1]].replace('.', ''), 16)
+                set_header_field(self.hs_format, rewrite, "dl_src", macaddr, 0)
+                
+                # make one rule for each destination ip
+                if route[0].lower() == "attached":
+                    subnetMask = (1 << subnetMask) - 1
+                    for ip in self.arp_table:
+                        if dotted_ip_to_int(ip) & subnetMask == subnetIp & subnetMask:
+                            newmask    = wildcard_copy(mask)
+                            newrewrite = wildcard_copy(rewrite)
+                            
+                            newmask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
+                            set_wildcard_field(self.hs_format, mask, "dl_dst", newmask, 0)
+                            
+                            macaddr = self.arp_table[ip]
+                            set_header_field(self.hs_format, rewrite, "dl_dst", macaddr, 0)
     
+                            tfrule = TF.create_standard_rule(inports, match, outports, newmask, newrewrite)
+                            tf_rtr.add_rewrite_rule(tfrule)
+                else:
+                    newmask    = wildcard_copy(mask)
+                    newrewrite = wildcard_copy(rewrite)
+
+                    replacemask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
+                    set_wildcard_field(self.hs_format, mask, "dl_dst", replacemask, 0)
+                    
+                    macaddr = self.arp_table[route[0]]
+                    set_header_field(self.hs_format, rewrite, "dl_dst", macaddr, 0)
     
+                    tfrule = TF.create_standard_rule(inports, match, outports, newmask, newrewrite)
+                    tf_rtr.add_rewrite_rule(tfrule)
+                    print "next hop: ", 
+                    print tf_rtr
+                    
+        print tf_rtr
+        #tf = TF.merge_tfs(tf, tf_rtr)
+        
+        return tf
+
         
 if __name__ == "__main__":
     cs = cisco_router(1)
+    cs.read_mac_table("../examples/Exodus_toy_example/toy_example/ext_mac_table.txt");
+
     cs.read_config_file("../examples/Exodus_toy_example/toy_example/ext_config.txt")
-    cs.read_config_file("../examples/Exodus_toy_example/toy_example/int_config.txt")
-    #cs.read_arp_table_file(file_path)
-    #cs.read_mac_table_file(file_path)
-    tf = TF(cs.hs_format["length"])
-    cs.generate_transfer_function(tf)
+    #cs.read_config_file("../examples/Exodus_toy_example/toy_example/int_config.txt")
+
+    cs.read_route_table_file("../examples/Exodus_toy_example/toy_example/ext_route.txt")
+    cs.read_arp_table_file("../examples/Exodus_toy_example/toy_example/ext_arp_table.txt")
+    #cs.read_mac_table_file("../examples/Exodus_toy_example/toy_example/ext_hardware_info.txt");
+
+    tf = cs.generate_transfer_function()
+    #print tf
