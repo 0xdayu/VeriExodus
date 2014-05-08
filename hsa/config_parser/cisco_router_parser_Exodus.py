@@ -390,11 +390,14 @@ class cisco_router(object):
             
             subnet   = line[0]
             next_hop = line[1]
-            iface    = line[2]
-
+            
             if subnet not in self.routes:
                 self.routes[subnet] = []
-            self.routes[subnet].append((next_hop, iface))
+
+            if next_hop.lower() == "drop":
+                self.routes[subnet].append(("drop", None))
+            else:
+                self.routes[subnet].append((next_hop, line[2]))
         
     def read_arp_table_file(self, file_path):
         print "=== Reading Cisco Router Config File ==="
@@ -488,63 +491,82 @@ class cisco_router(object):
 
         #----------------------- STATIC ROUTING -----------------------
         tf_rtr = TF(self.hs_format["length"])
+        sizes = {}
         for subnet in self.routes:
-            for route in self.routes[subnet]:
-                inports = []
-                match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
-                mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
-                rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
-                outports = [self.get_port_id(route[1])]
+            [subnetIp, subnetMask] = dotted_subnet_to_int(subnet)
+            if subnetMask not in sizes:
+                sizes[subnetMask] = []
+            
+            sizes[subnetMask].append(subnet)
+            
+        for i in range(32, -1, -1):
+            if i not in sizes:
+                continue
 
-                # match
+            for subnet in sizes[i]:
                 [subnetIp, subnetMask] = dotted_subnet_to_int(subnet)
-                set_header_field(self.hs_format, match, "ip_dst", subnetIp, 32 - subnetMask)
-                
-                # mask
-                newmask = wildcard_create_bit_repeat(self.hs_format["dl_src_len"], 0x1)
-                set_wildcard_field(self.hs_format, mask, "dl_src", newmask, 0)
-                
-                # rewrite
-                macaddr = int(self.iface_mac[route[1]].replace('.', ''), 16)
-                set_header_field(self.hs_format, rewrite, "dl_src", macaddr, 0)
-                
-                # make one rule for each destination ip
-                if route[0].lower() == "attached":
-                    subnetMask = ((1 << subnetMask) - 1) << (32 - subnetMask)
-                    for ip in self.arp_table:
-                        if dotted_ip_to_int(ip) & subnetMask == subnetIp & subnetMask:
-                            newmask    = wildcard_copy(mask)
-                            newrewrite = wildcard_copy(rewrite)
-                            
-                            replacemask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
-                            set_wildcard_field(self.hs_format, newmask, "dl_dst", replacemask, 0)
-                            
-                            macaddr = self.arp_table[ip]
-                            set_header_field(self.hs_format, newrewrite, "dl_dst", macaddr, 0)
-    
-                            tfrule = TF.create_standard_rule(inports, match, outports, newmask, newrewrite)
-                            tf_rtr.add_rewrite_rule(tfrule)
-                else:
-                    newmask    = wildcard_copy(mask)
-                    newrewrite = wildcard_copy(rewrite)
-
-                    replacemask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
-                    set_wildcard_field(self.hs_format, newmask, "dl_dst", replacemask, 0)
                     
-                    # get MAC of next hop
-                    macaddr = self.arp_table[route[0]]
-                    set_header_field(self.hs_format, newrewrite, "dl_dst", macaddr, 0)
-    
-                    tfrule = TF.create_standard_rule(inports, match, outports, newmask, newrewrite)
-                    tf_rtr.add_rewrite_rule(tfrule)
+                for route in self.routes[subnet]:
+                    inports = []
+                    match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
+                    mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
+                    rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
+                    outports = [self.get_port_id(route[1])]
+
+                    if route[0].lower() == "drop":
+                        tfrule = TF.create_standard_rule(inports, match, [], mask, rewrite)
+                        tf_rtr.add_rewrite_rule(tfrule)
+                        continue
+                    
+                    # match
+                    set_header_field(self.hs_format, match, "ip_dst", subnetIp, 32 - subnetMask)
+
+                    # mask
+                    newmask = wildcard_create_bit_repeat(self.hs_format["dl_src_len"], 0x1)
+                    set_wildcard_field(self.hs_format, mask, "dl_src", newmask, 0)
+                    
+                    # rewrite
+                    macaddr = int(self.iface_mac[route[1]].replace('.', ''), 16)
+                    set_header_field(self.hs_format, rewrite, "dl_src", macaddr, 0)
+
+                    if route[0].lower() == "attached":
+                        # make one rule for each destination ip
+                        subnetMask = ((1 << subnetMask) - 1) << (32 - subnetMask)
+                        for ip in self.arp_table:
+                            if dotted_ip_to_int(ip) & subnetMask == subnetIp & subnetMask:
+                                newmask    = wildcard_copy(mask)
+                                newrewrite = wildcard_copy(rewrite)
+                                
+                                replacemask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
+                                set_wildcard_field(self.hs_format, newmask, "dl_dst", replacemask, 0)
+                                
+                                macaddr = self.arp_table[ip]
+                                set_header_field(self.hs_format, newrewrite, "dl_dst", macaddr, 0)
+        
+                                tfrule = TF.create_standard_rule(inports, match, outports, newmask, newrewrite)
+                                tf_rtr.add_rewrite_rule(tfrule)
+                    else:
+                        # normal routing
+                        newmask    = wildcard_copy(mask)
+                        newrewrite = wildcard_copy(rewrite)
+
+                        replacemask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
+                        set_wildcard_field(self.hs_format, newmask, "dl_dst", replacemask, 0)
+                        
+                        # get MAC of next hop
+                        macaddr = self.arp_table[route[0]]
+                        set_header_field(self.hs_format, newrewrite, "dl_dst", macaddr, 0)
+        
+                        tfrule = TF.create_standard_rule(inports, match, outports, newmask, newrewrite)
+                        tf_rtr.add_rewrite_rule(tfrule)
                     
         #-------------------------- OUT ACL --------------------------
         tf_out_acl = generate_acl_tf("out", self.ifaces_wo_out)
 
         
         #--------------------------- MERGE ---------------------------
-        tf_inacl_rtr = TF.merge_tfs(tf_in_acl, tf_rtr, TF.id_port_mapper)
-        tf_full = TF.merge_tfs(tf_inacl_rtr, tf_out_acl, TF.id_port_mapper)
+        tf_inacl_rtr = TF.merge_tfs(tf_in_acl, tf_rtr, TF.id_port_mapper, lambda n : False)
+        tf_full = TF.merge_tfs(tf_inacl_rtr, tf_out_acl, TF.id_port_mapper, lambda n : False)
         
         # add implicit all drop
         match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
@@ -578,8 +600,10 @@ if __name__ == "__main__":
     #cs.read_mac_table_file("../examples/Exodus_toy_example/toy_example/ext_hardware_info.txt");
 
     tf = cs.generate_transfer_function()
+    """
     f = open('result_tf.txt', 'w')
     f.write(str(tf))
     f.close()
+    """
 
 

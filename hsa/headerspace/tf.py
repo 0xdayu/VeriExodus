@@ -191,7 +191,7 @@ class TF(object):
         return port - 1
     
     @staticmethod
-    def merge_tfs(tf1, tf2, port_mapper):
+    def merge_tfs(tf1, tf2, port_mapper, ignore_inports):
         rtf = TF(tf1.length)
         
         for r1 in tf1.rules:
@@ -200,12 +200,31 @@ class TF(object):
                 ctlr_rule = TF.create_standard_rule(list(r1["in_ports"]), wildcard_copy(r1["match"]), \
                                                     [CTLR_PORT], wildcard_copy(r1["mask"]), wildcard_copy(r1["rewrite"]))
                 rtf.add_rewrite_rule(ctlr_rule)
-                
-            # merge with second router's rules
-            for r2 in tf2.rules:
-                newrule = TF.merge_rule(r1, r2, port_mapper)
-                if newrule != None:
-                    rtf.add_rewrite_rule(newrule)
+
+            if len(r1["in_ports"]) > 0:
+                if len(r1["out_ports"]) == 0:
+                    # drop rule, just copy over
+                    rtf.add_rewrite_rule(r1)
+                else:
+
+                    """
+                    # ignore certain ports
+                    orig_inports = r2["in_ports"]
+                    r2["in_ports"] = []
+                    for p in orig_inports:
+                        if not ignore_inports(p):
+                            r2["in_ports"].append(p)
+                    """
+
+                    # merge with second router's rules
+                    for r2 in tf2.rules:
+
+                        newrule = TF.merge_rule(r1, r2, port_mapper)
+                        if newrule != None:
+                            rtf.add_rewrite_rule(newrule)
+
+                    #r2["in_ports"] = orig_inports
+
 
         return rtf
 
@@ -494,9 +513,10 @@ class TF(object):
         # find existing rules with same fields
         for r in self.rules:
             if wildcard_is_equal(rule["match"], r["match"]) and \
-               wildcard_is_equal(rule["mask"], r["mask"]) and \
-               wildcard_is_equal(rule["rewrite"], r["rewrite"]) and \
-               set(rule["out_ports"]) == set(r["out_ports"]):
+               set(rule["in_ports"]) == set(r["in_ports"]):
+               #wildcard_is_equal(rule["mask"], r["mask"]) and \
+               #wildcard_is_equal(rule["rewrite"], r["rewrite"]) and \
+               #set(rule["out_ports"]) == set(r["out_ports"]):
                 
                 if len(r["in_ports"]) == 0 or len(rule["in_ports"]) == 0:
                     r["in_ports"] = []

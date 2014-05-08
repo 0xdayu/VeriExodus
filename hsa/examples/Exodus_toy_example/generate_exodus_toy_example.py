@@ -292,12 +292,12 @@ def convert_switches_to_tfs(h_switches, formatt):
 
     return switch_tfs
     
-def merge_tfs(tfs, pipeline, pipeline_ports):
+def merge_tfs(tfs, pipeline, pipeline_ports, ignore_inports):
     # merge based on pipeline
     merged_tf = switch_tfs[pipeline[0]]
     for i in range(1, len(pipeline)):
         switch = switch_tfs[pipeline[i]]
-        merged_tf = TF.merge_tfs(merged_tf, switch, pipeline_ports[i - 1])
+        merged_tf = TF.merge_tfs(merged_tf, switch, pipeline_ports[i - 1], ignore_inports[i - 1])
 
         f = open("merge_" + str(i), 'w')
         f.write(str(merged_tf))
@@ -318,7 +318,13 @@ for rtrname in switch_tfs:
 tfile.close()
 
 # merge based on pipeline
-merged_tf = merge_tfs(switch_tfs, pipeline, pipeline_ports)
+ign_even = lambda n : n % 2 == 0
+ign_odd = lambda n : n % 2 == 1
+ign_none = lambda n : False
+
+ignore_inports = [ign_none, ign_none, ign_none, ign_none, ign_none]
+
+merged_tf = merge_tfs(switch_tfs, pipeline, pipeline_ports, ignore_inports)
 f = open('of_tf_result', 'w')
 f.write(str(merged_tf))
 f.close()
