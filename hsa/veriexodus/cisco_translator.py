@@ -434,39 +434,43 @@ class cisco_router(object):
 
                 # make a tf rule for each acl rule
                 for rule in acl_rules:
-                    match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
-                    mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
-                    rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
-                    
-                    # PROTOCOLS
-                    """
-                    if rule["etherType"] != NO_ETHERTYPE:
-                        set_header_field(self.hs_format, match, "dl_proto", rule["etherType"], 0)
-                    """
-                    set_header_field(self.hs_format, match, "dl_proto", 0x800, 0)
+                    for iface_info in self.acl_iface[acl_num]:
+                        match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
+                        mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
+                        rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
+                        
+                        macaddr = int(self.iface_mac[iface_info[0]].replace('.', ''), 16)
+                        set_header_field(self.hs_format, match, "dl_dst", macaddr, 0)
 
-                    if rule["ip_protocol"]:
-                        set_header_field(self.hs_format, match, "ip_proto", rule["ip_protocol"], 0)
-    
-                    # IPS
-                    set_masked(match, "ip_src", rule["src_ip_mask"], rule["src_ip"])
-                    set_masked(match, "ip_dst", rule["dst_ip_mask"], rule["dst_ip"])
-    
-                    # TRANSPORT_PORT
-                    set_range(match, "transport_src", rule["transport_src_begin"], rule["transport_src_end"])
-                    set_range(match, "transport_dst", rule["transport_dst_begin"], rule["transport_dst_end"])
-    
-                    set_range(match, "transport_ctrl", rule["transport_ctrl_begin"], rule["transport_ctrl_end"])
-    
-                    if rule["action"]:
-                        # permit
-                        for i in inports:
-                            tfrule = TF.create_standard_rule([i], match, [i], mask, rewrite)
+                        # PROTOCOLS
+                        """
+                        if rule["etherType"] != NO_ETHERTYPE:
+                            set_header_field(self.hs_format, match, "dl_proto", rule["etherType"], 0)
+                        """
+                        set_header_field(self.hs_format, match, "dl_proto", 0x800, 0)
+
+                        if rule["ip_protocol"]:
+                            set_header_field(self.hs_format, match, "ip_proto", rule["ip_protocol"], 0)
+        
+                        # IPS
+                        set_masked(match, "ip_src", rule["src_ip_mask"], rule["src_ip"])
+                        set_masked(match, "ip_dst", rule["dst_ip_mask"], rule["dst_ip"])
+        
+                        # TRANSPORT_PORT
+                        set_range(match, "transport_src", rule["transport_src_begin"], rule["transport_src_end"])
+                        set_range(match, "transport_dst", rule["transport_dst_begin"], rule["transport_dst_end"])
+        
+                        set_range(match, "transport_ctrl", rule["transport_ctrl_begin"], rule["transport_ctrl_end"])
+        
+                        if rule["action"]:
+                            # permit
+                            for i in inports:
+                                tfrule = TF.create_standard_rule([i], match, [i], mask, rewrite)
+                                tf_acl.add_rewrite_rule(tfrule)
+                        else:
+                            # deny
+                            tfrule = TF.create_standard_rule(inports, match, [], mask, rewrite)
                             tf_acl.add_rewrite_rule(tfrule)
-                    else:
-                        # deny
-                        tfrule = TF.create_standard_rule(inports, match, [], mask, rewrite)
-                        tf_acl.add_rewrite_rule(tfrule)
     
             # add interfaces without in, let them bypass
             for iface in bypass_ifaces:
@@ -579,6 +583,7 @@ class cisco_router(object):
         match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
         mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
         rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
+        set_header_field(self.hs_format, match, "dl_proto", 0x800, 0)
         tf_full.add_rewrite_rule(TF.create_standard_rule([], match, [], mask, rewrite))
 
         write_file('ios_tf_in_acl', tf_in_acl)

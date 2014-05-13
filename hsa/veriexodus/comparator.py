@@ -34,9 +34,9 @@ class VeriComparator:
         # filter OpenFlow rules
         filtered_rules = []
         for rule in of_tf.rules:
-            if reduce(lambda result, n: result and not ign_ports(n), rule["in_ports"], True) and rule["out_ports"] != [65535]:
-                repmask = wildcard_create_bit_repeat(ios.hs_format["dl_dst_len"], 0x3)
-                set_wildcard_field(ios.hs_format, rule["match"], "dl_dst", repmask, 0)
+            if reduce(lambda result, n: result and not ign_ports(n), rule["in_ports"], True):
+                #repmask = wildcard_create_bit_repeat(ios.hs_format["dl_dst_len"], 0x3)
+                #set_wildcard_field(ios.hs_format, rule["match"], "dl_dst", repmask, 0)
                 filtered_rules.append(rule)
             
         of_tf.rules = filtered_rules
