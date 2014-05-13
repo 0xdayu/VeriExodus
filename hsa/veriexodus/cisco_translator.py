@@ -512,14 +512,14 @@ class cisco_router(object):
                     mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
                     rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
                     outports = [self.get_port_id(route[1])]
+                    
+                    # match
+                    set_header_field(self.hs_format, match, "ip_dst", subnetIp, 32 - subnetMask)
 
                     if route[0].lower() == "drop":
                         tfrule = TF.create_standard_rule(inports, match, [], mask, rewrite)
                         tf_rtr.add_rewrite_rule(tfrule)
                         continue
-                    
-                    # match
-                    set_header_field(self.hs_format, match, "ip_dst", subnetIp, 32 - subnetMask)
 
                     # mask
                     newmask = wildcard_create_bit_repeat(self.hs_format["dl_src_len"], 0x1)
