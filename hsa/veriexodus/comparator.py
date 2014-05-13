@@ -8,6 +8,8 @@ class VeriComparator:
         actual_outports = map(port_map, r1["out_ports"])
 
         is_drop_rule = len(actual_outports) == 0 and len(r2["out_ports"]) == 0
+        
+        
 
         return set(actual_inports) == set(r2["in_ports"]) and       \
                (is_drop_rule and wildcard_is_equal(r1["match"], r2["match"]) or      \
@@ -29,9 +31,12 @@ class VeriComparator:
         ios_ports = lambda n: port_map[n]
         ign_ports = lambda n: n % 2 == 0
         
+        # filter OpenFlow rules
         filtered_rules = []
         for rule in of_tf.rules:
-            if reduce(lambda rule, n: rule and not ign_ports(n), rule["in_ports"], True) and rule["out_ports"] != [65535]:
+            if reduce(lambda result, n: result and not ign_ports(n), rule["in_ports"], True) and rule["out_ports"] != [65535]:
+                repmask = wildcard_create_bit_repeat(ios.hs_format["dl_dst_len"], 0x3)
+                set_wildcard_field(ios.hs_format, rule["match"], "dl_dst", repmask, 0)
                 filtered_rules.append(rule)
             
         of_tf.rules = filtered_rules
