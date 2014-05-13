@@ -439,8 +439,12 @@ class cisco_router(object):
                     rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
                     
                     # PROTOCOLS
+                    """
                     if rule["etherType"] != NO_ETHERTYPE:
                         set_header_field(self.hs_format, match, "dl_proto", rule["etherType"], 0)
+                    """
+                    set_header_field(self.hs_format, match, "dl_proto", 0x800, 0)
+
                     if rule["ip_protocol"]:
                         set_header_field(self.hs_format, match, "ip_proto", rule["ip_protocol"], 0)
     
@@ -470,6 +474,8 @@ class cisco_router(object):
                 match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
                 mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
                 rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
+
+                set_header_field(self.hs_format, match, "dl_proto", 0x800, 0)
 
                 tfrule = TF.create_standard_rule([iport], match, [iport], mask, rewrite)
                 tf_acl.add_rewrite_rule(tfrule)
@@ -513,7 +519,6 @@ class cisco_router(object):
                     rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
                     outports = [self.get_port_id(route[1])]
                     
-                    # match
                     set_header_field(self.hs_format, match, "ip_dst", subnetIp, 32 - subnetMask)
 
                     if route[0].lower() == "drop":
@@ -522,8 +527,8 @@ class cisco_router(object):
                         continue
 
                     # mask
-                    newmask = wildcard_create_bit_repeat(self.hs_format["dl_src_len"], 0x1)
-                    set_wildcard_field(self.hs_format, mask, "dl_src", newmask, 0)
+                    repmask = wildcard_create_bit_repeat(self.hs_format["dl_src_len"], 0x1)
+                    set_wildcard_field(self.hs_format, mask, "dl_src", repmask, 0)
                     
                     # rewrite
                     macaddr = int(self.iface_mac[route[1]].replace('.', ''), 16)
@@ -533,31 +538,33 @@ class cisco_router(object):
                         # make one rule for each destination ip
                         subnetMask = ((1 << subnetMask) - 1) << (32 - subnetMask)
                         for ip in self.arp_table:
-                            if dotted_ip_to_int(ip) & subnetMask == subnetIp & subnetMask:
+                            ipInt = dotted_ip_to_int(ip)
+                            if ipInt & subnetMask == subnetIp & subnetMask:
+                                # normal routing
+                                newmatch   = wildcard_copy(match)
                                 newmask    = wildcard_copy(mask)
                                 newrewrite = wildcard_copy(rewrite)
-                                
+
+                                set_header_field(self.hs_format, newmatch, "ip_dst", ipInt, 0)
+
+                                # mask
                                 replacemask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
                                 set_wildcard_field(self.hs_format, newmask, "dl_dst", replacemask, 0)
                                 
                                 macaddr = self.arp_table[ip]
                                 set_header_field(self.hs_format, newrewrite, "dl_dst", macaddr, 0)
         
-                                tfrule = TF.create_standard_rule(inports, match, outports, newmask, newrewrite)
+                                tfrule = TF.create_standard_rule(inports, newmatch, outports, newmask, newrewrite)
                                 tf_rtr.add_rewrite_rule(tfrule)
                     else:
-                        # normal routing
-                        newmask    = wildcard_copy(mask)
-                        newrewrite = wildcard_copy(rewrite)
-
                         replacemask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
-                        set_wildcard_field(self.hs_format, newmask, "dl_dst", replacemask, 0)
-                        
+                        set_wildcard_field(self.hs_format, mask, "dl_dst", replacemask, 0)
+
                         # get MAC of next hop
                         macaddr = self.arp_table[route[0]]
-                        set_header_field(self.hs_format, newrewrite, "dl_dst", macaddr, 0)
+                        set_header_field(self.hs_format, rewrite, "dl_dst", macaddr, 0)
         
-                        tfrule = TF.create_standard_rule(inports, match, outports, newmask, newrewrite)
+                        tfrule = TF.create_standard_rule(inports, match, outports, mask, rewrite)
                         tf_rtr.add_rewrite_rule(tfrule)
                     
         #-------------------------- OUT ACL --------------------------
@@ -579,7 +586,7 @@ class cisco_router(object):
         write_file('ios_tf_out_acl', tf_out_acl)
 
         write_file('ios_merge_1', tf_inacl_rtr)
-        write_file('ios_merge_2', tf_full)
+        write_file('ios_tf_result', tf_full)
 
         return tf_full
     def read_inputs(self, mac_table, config_file, route_table, arp_table):
