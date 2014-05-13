@@ -596,7 +596,7 @@ class cisco_router(object):
         self.read_arp_table_file(arp_table)
 
 def write_file(fname, tf):
-    f = open(fname, 'w')
+    f = open('results/' + fname, 'w')
     f.write(str(tf))
     f.close()
         

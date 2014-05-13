@@ -258,7 +258,7 @@ def merge_tfs(tfs, pipeline, pipeline_ports, ignore_inports):
         switch = tfs[pipeline[i]]
         merged_tf = TF.merge_tfs(merged_tf, switch, pipeline_ports[i - 1], ignore_inports[i - 1])
 
-        f = open("of_merge_" + str(i), 'w')
+        f = open("results/of_merge_" + str(i), 'w')
         f.write(str(merged_tf))
         f.close()
 
@@ -314,7 +314,7 @@ def generate_ext():
     switch_tfs = convert_switches_to_tfs(h_switches, formatt)
 
     # output HSA tf results:
-    tfile = open("switch_tfs", "w")
+    tfile = open("results/switch_tfs", "w")
     for rtrname in switch_tfs:
         tfile.write("==============" + rtrname + "==============\n")
         tfile.write(str(switch_tfs[rtrname]))
@@ -329,7 +329,7 @@ def generate_ext():
     ignore_inports = [ign_none, ign_none, ign_none, ign_none, ign_none]
 
     merged_tf = merge_tfs(switch_tfs, pipeline, pipeline_ports, ignore_inports)
-    f = open('of_tf_result', 'w')
+    f = open('results/of_tf_result', 'w')
     f.write(str(merged_tf))
     f.close()
     
