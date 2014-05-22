@@ -181,17 +181,18 @@ class TF(object):
     @staticmethod
     def id_port_mapper(port):
         return port
+
     
     @staticmethod
     def bck_port_mapper(port):
         return port + 1
-    
+
     @staticmethod
     def fwd_port_mapper(port):
         return port - 1
-    
+
     @staticmethod
-    def merge_tfs(tf1, tf2, port_mapper, ignore_inports):
+    def merge_tfs(tf1, tf2, port_mapper):
         rtf = TF(tf1.length)
         
         for r1 in tf1.rules:
@@ -206,16 +207,6 @@ class TF(object):
                     # drop rule, just copy over
                     rtf.add_rewrite_rule(r1)
                 else:
-
-                    """
-                    # ignore certain ports
-                    orig_inports = r2["in_ports"]
-                    r2["in_ports"] = []
-                    for p in orig_inports:
-                        if not ignore_inports(p):
-                            r2["in_ports"].append(p)
-                    """
-
                     # merge with second router's rules
                     for r2 in tf2.rules:
 
@@ -230,6 +221,7 @@ class TF(object):
 
     @staticmethod
     def merge_rule(r1, r2, port_mapper):
+        #pipeline inports and outports
         outport = set(map(port_mapper, r1["out_ports"]))
         inport = set(r2["in_ports"])
         
@@ -237,9 +229,10 @@ class TF(object):
         rewritten_match = TF.rewrite_hsa(r1["match"], r1["mask"], r1["rewrite"])
         
         rules_match = TF.is_match(rewritten_match, r2["match"])
+        #TODO:Something wrong with all and need to be fixed
         if "action_all" in r1 and r1["action_all"]:
-            r2_inport  = set(map(port_mapper, r1["in_ports"]))      # these in ports are not allowed
-            rules_match = rules_match and len(inport - r2_inport) > 0
+            disallowed_ports  = set(map(port_mapper, r1["in_ports"]))      # these in ports are not allowed
+            rules_match = rules_match and len(inport - disallowed_ports) > 0
         else:
             # either inport -> outport, or inport is all packets,
             rules_match = rules_match and (len(outport.intersection(inport)) > 0 or len(inport) == 0)
@@ -253,7 +246,7 @@ class TF(object):
             new_rewrite  = TF.merge_rewrite(r1["rewrite"], r2["mask"], r2["rewrite"])
             new_rule = TF.create_standard_rule(new_inports, new_match, new_outports, new_mask, new_rewrite)
             
-            if "action_all" in r1 and r1["action_all"]:
+            if "action_all" in r2 and r2["action_all"]:
                 new_rule["action_all"] = True
             
             return new_rule

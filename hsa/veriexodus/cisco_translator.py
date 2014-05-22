@@ -293,15 +293,7 @@ class cisco_router(object):
         
     
     def parse_interface_config(self,iface_info,file_path):
-        def is_in_range(range,val):
-            st = range.split("-")
-            if len(st) > 1 and int(val) >= int(st[0]) and int(val) <= int(st[1]):
-                return True
-            elif len(st) == 1 and int(val) == int(st[0]):
-                return True
-            else:
-                return False
-        
+
         iface_decl = iface_info[0][0].split()
         iface = iface_decl[1]
 
@@ -346,6 +338,7 @@ class cisco_router(object):
             elif line.startswith("ip access-list"):
                 reading_ipacl = True
                 reading_iface = False
+                #ipacl_start is the name of this acl
                 ipacl_start = (line.split())[3]
                 if ((line.split())[2] == "standard"):
                     ipacl_std = True
@@ -509,6 +502,7 @@ class cisco_router(object):
             
             sizes[subnetMask].append(subnet)
             
+        #longest prefix-matching
         for i in range(32, -1, -1):
             if i not in sizes:
                 continue
@@ -521,7 +515,6 @@ class cisco_router(object):
                     match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
                     mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
                     rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
-                    outports = [self.get_port_id(route[1])]
                     
                     set_header_field(self.hs_format, match, "ip_dst", subnetIp, 32 - subnetMask)
 
@@ -529,6 +522,8 @@ class cisco_router(object):
                         tfrule = TF.create_standard_rule(inports, match, [], mask, rewrite)
                         tf_rtr.add_rewrite_rule(tfrule)
                         continue
+
+                    outports = [self.get_port_id(route[1])]
 
                     # mask
                     repmask = wildcard_create_bit_repeat(self.hs_format["dl_src_len"], 0x1)
@@ -576,8 +571,8 @@ class cisco_router(object):
 
         
         #--------------------------- MERGE ---------------------------
-        tf_inacl_rtr = TF.merge_tfs(tf_in_acl, tf_rtr, TF.id_port_mapper, lambda n : False)
-        tf_full = TF.merge_tfs(tf_inacl_rtr, tf_out_acl, TF.id_port_mapper, lambda n : False)
+        tf_inacl_rtr = TF.merge_tfs(tf_in_acl, tf_rtr, TF.id_port_mapper)
+        tf_full = TF.merge_tfs(tf_inacl_rtr, tf_out_acl, TF.id_port_mapper)
         
         # add implicit all drop
         match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
@@ -594,6 +589,7 @@ class cisco_router(object):
         write_file('ios_tf_result', tf_full)
 
         return tf_full
+
     def read_inputs(self, mac_table, config_file, route_table, arp_table):
         self.read_mac_table(mac_table);
         self.read_config_file(config_file)
@@ -616,5 +612,3 @@ if __name__ == "__main__":
     f.write(str(tf))
     f.close()
     """
-
-
