@@ -218,7 +218,7 @@ class TF(object):
 
 
         return rtf
-
+   
     @staticmethod
     def merge_rule(r1, r2, port_mapper):
         #pipeline inports and outports
