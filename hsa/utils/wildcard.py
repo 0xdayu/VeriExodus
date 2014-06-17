@@ -152,6 +152,10 @@ def wildcard_copy(w):
         return wildcard(w.length,_wildcard_copy(w.pointer,w.length))
     else:
         return wildcard(w.length,None)
+'''
+wildcard_and, wildcard_or and wildcard_not are bits to bits logical operators, like 111 wildcard_or 000
+will be 111, 111 wildcard_and 000 will be 111
+'''
 
 def wildcard_and(w1,w2):
     if w1.length != w2.length:
