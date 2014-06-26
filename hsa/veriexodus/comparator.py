@@ -170,9 +170,45 @@ class Comparator:
     @staticmethod
     def printRules(rules):
         for rule in rules:
-            print "in_ports: %s, match: %s => ((h & %s) | %s, %s)" % \
+            '''print "in_ports: %s, match: %s => ((h & %s) | %s, %s)" % \
                 (rule['in_ports'], rule['match'], rule['mask'], \
                  rule['rewrite'], rule['out_ports'])
+            '''
+            print "in_ports: %s\n, match: %s\n, mask: %s\n, rewrite: %s\n, out_ports: %s\n" % \
+                (rule['in_ports'], Comparator.parseWildcard(rule['match']), Comparator.parseWildcard(rule['mask']), \
+                 Comparator.parseWildcard(rule['rewrite']), rule['out_ports'])
+                
+    @staticmethod
+    def parseWildcard(w):
+        
+        format = {}
+        format["vlan_pos"] = 0
+        format["ip_src_pos"] = 2
+        format["ip_dst_pos"] = 6
+        format["ip_proto_pos"] = 10
+        format["transport_src_pos"] = 11
+        format["transport_dst_pos"] = 13
+        format["transport_ctrl_pos"] = 15
+        format["dl_src_pos"] = 16
+        format["dl_dst_pos"] = 22
+        format["dl_proto_pos"] = 28
+        format["vlan_len"] = 2
+        format["ip_src_len"] = 4
+        format["ip_dst_len"] = 4
+        format["ip_proto_len"] = 1
+        format["transport_src_len"] = 2
+        format["transport_dst_len"] = 2
+        format["transport_ctrl_len"] = 1
+        format["dl_src_len"] = 6
+        format["dl_dst_len"] = 6
+        format["dl_proto_len"] = 2
+        format["length"] = 30
+        
+        fields = ["vlan","dl_src","dl_dst","dl_proto","ip_src","ip_dst","ip_proto","transport_src",\
+          "transport_dst"]
+        return wc_header_to_parsed_string(format, fields, w)
+        
+    
                         
     # Just for Test                        
     def TestDictGen(self, rules):
