@@ -41,6 +41,32 @@ class Test(unittest.TestCase):
         self.assert_(Test.rule_is_equal(result[2], TF.create_standard_rule([1], w5, [4], w4, w4)))
         self.assert_(Test.rule_is_equal(result[3], TF.create_standard_rule([1], w6, [4], w4, w4)))
         
+    def testDecoupleRules_with_multiple_bits(self):
+        tf = TF(1)
+        w1 = wildcard_create_from_string("1111111x")
+        w2 = wildcard_create_from_string("111111x1")
+        w3 = wildcard_create_from_string("111111xx")
+        w4 = wildcard_create_from_string("xxxxxxxx")
+        
+        w5 = wildcard_create_from_string("11111101")
+        w6 = wildcard_create_from_string("11111100")
+        
+        tf.add_rewrite_rule(TF.create_standard_rule([1], w1, [2], \
+                                                w4, w4))
+        tf.add_rewrite_rule(TF.create_standard_rule([1], w2, [3], \
+                                                w4, w4))
+        tf.add_rewrite_rule(TF.create_standard_rule([1], w3, [4], \
+                                                w4, w4))
+        
+        c = Comparator()
+        d = c.TestDictGen(tf.rules)
+        result = c.decoupleRules(d[1])
+        self.assertEqual(len(result), 3)
+        self.assert_(Test.rule_is_equal(result[0], TF.create_standard_rule([1], w1, [2], w4, w4)))
+        self.assert_(Test.rule_is_equal(result[1], TF.create_standard_rule([1], w5, [3], w4, w4)))
+        self.assert_(Test.rule_is_equal(result[2], TF.create_standard_rule([1], w6, [4], w4, w4)))
+        
+        
     def testComparison_non_equal(self):
         tf1 = TF(1)
         tf2 = TF(1)
@@ -93,5 +119,6 @@ class Test(unittest.TestCase):
         
 if __name__ == "__main__":
     import sys;
-    sys.argv = ['', 'Test.testComparison_equal', 'Test.testComparison_non_equal', 'Test.testDecopuleRules']
+    sys.argv = ['', 'Test.testComparison_equal', 'Test.testComparison_non_equal', \
+                'Test.testDecopuleRules', 'Test.testDecoupleRules_with_multiple_bits']
     unittest.main()
