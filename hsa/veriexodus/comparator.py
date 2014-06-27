@@ -12,18 +12,26 @@ class Comparator:
         self.ios_hs = {}
         self.of_hs = {}
 
-    def compare(self, hs1, hs2):
-        #isEqual = True
+    def compare(self, tf1, tf2):
+        #decouple two header spaces
+        for key, value in tf1.iteritems():
+            if key == "controller_rules":
+                continue
+            tf1[key] = self.decoupleRules(value)
+            
+        for key, value in tf2.iteritems():
+            if key == "controller_rules":
+                continue
+            tf2[key] = self.decoupleRules(value)
+            
         not_found_rules = []
-        for key, value in hs1.iteritems():
+        for key, value in tf1.iteritems():
             if key == "controller_rules":
                 print "======Ignore Rules sent to the Controller====="
                 continue
-            if key in hs2.keys():
-                #isEqual = isEqual and self.compareRules(self.decoupleRules(value), self.decoupleRules(hs2[key]))
-                not_found_rules += self.compareRules(self.decoupleRules(value), self.decoupleRules(hs2[key]))
+            if key in tf2.keys():
+                not_found_rules += self.compareRules(value, tf2[key])
             else:
-                #isEqual = isEqual and False
                 not_found_rules += value
         return not_found_rules
             
@@ -31,7 +39,7 @@ class Comparator:
         not_found_rules = []
         #isEqual = True
         for r1 in rules1:
-            r2 = self.getHeaderSpaceWithSameFourTuples(r1, rules2)
+            r2 = self.getHeaderSpaceWithSameActions(r1, rules2)
             if len(r2) == 0:
                 #isEqual = False
                 not_found_rules.append(r1)
@@ -40,7 +48,8 @@ class Comparator:
             temp = []
             temp.append(r1)
             for _r2 in r2:
-                for i in range(len(temp)):
+                size = len(temp)
+                for i in range(size):
                     _r1 = temp.pop(0)
                     intersect_part = wildcard_intersect(_r1["match"], _r2["match"])
                     if len(intersect_part) == 0: #no overlap headerspace
@@ -62,7 +71,7 @@ class Comparator:
         #print "----", isEqual
         return not_found_rules
                              
-    def getHeaderSpaceWithSameFourTuples(self, r1, rule_set): # get rules from rule_set with same inports, mask, rewrite and outports
+    def getHeaderSpaceWithSameActions(self, r1, rule_set): # get rules from rule_set with same inports, mask, rewrite and outports
         result = []
         for r2 in rule_set:
             if wildcard_is_equal(r1["mask"], r2["mask"]) and \
@@ -81,8 +90,13 @@ class Comparator:
         example_folder + 'ext_arp_table.txt')
         ios_tf = ios.generate_transfer_function()
         
-        port_map = {1:3, 2:1}
-        ios_ports = lambda n: port_map[n]
+        #port_map = {1:3, 2:1}
+        #ios_ports = lambda n: port_map[n]
+        
+        inport_map = {1:3, 2:1}
+        inport_mapper = lambda n: inport_map[n]
+        outport_map = {1:3, 2:1}
+        outport_mapper = lambda n: outport_map[n]
         
         for rule in ios_tf.rules:
             #drop rules
@@ -90,8 +104,8 @@ class Comparator:
             #    continue
             
             #map the port number to OF
-            rule["in_ports"] = map(ios_ports, rule["in_ports"])
-            rule["out_ports"] = map(ios_ports, rule["out_ports"])
+            rule["in_ports"] = map(inport_mapper, rule["in_ports"])
+            rule["out_ports"] = map(outport_mapper, rule["out_ports"])
             
             for inports in rule["in_ports"]:
                 if inports in self.ios_hs.keys():
@@ -157,6 +171,13 @@ class Comparator:
                             continue
                         t = currentRule.copy()
                         t['match'] = tw
+                        #for debugging use
+                        t['generated'] = rule
+                        if 'shadowed' in t.keys():
+                            t['shadowed'].append(result)
+                        else:
+                            t['shadowed'] = [result]
+                        
                         temp.append(t)
             results += temp
             
@@ -172,11 +193,31 @@ class Comparator:
         for rule in rules:
             '''print "in_ports: %s, match: %s => ((h & %s) | %s, %s)" % \
                 (rule['in_ports'], rule['match'], rule['mask'], \
-                 rule['rewrite'], rule['out_ports'])
-            '''
+                 rule['rewrite'], rule['out_ports'])'''
+
             print "in_ports: %s\n, match: %s\n, mask: %s\n, rewrite: %s\n, out_ports: %s\n" % \
                 (rule['in_ports'], Comparator.parseWildcard(rule['match']), Comparator.parseWildcard(rule['mask']), \
                  Comparator.parseWildcard(rule['rewrite']), rule['out_ports'])
+            
+            
+            #for debugging
+            if 'generated' in rule.keys():
+                print '---------Generated By-----------'
+                r = rule['generated']
+                print "in_ports: %s\n, match: %s\n, mask: %s\n, rewrite: %s\n, out_ports: %s\n" % \
+                (r['in_ports'], Comparator.parseWildcard(r['match']), Comparator.parseWildcard(r['mask']), \
+                 Comparator.parseWildcard(r['rewrite']), r['out_ports'])
+                print '----------------------------'
+            if 'shadowed' in rule.keys():
+                print '---------Shadowed By-----------'
+                s = rule['shadowed']
+                for r in s:
+                    print "in_ports: %s\n, match: %s\n, mask: %s\n, rewrite: %s\n, out_ports: %s\n" % \
+                    (r['in_ports'], Comparator.parseWildcard(r['match']), Comparator.parseWildcard(r['mask']), \
+                     Comparator.parseWildcard(r['rewrite']), r['out_ports'])
+                print '----------------------------'
+            print '********************************************************'
+            
                 
     @staticmethod
     def parseWildcard(w):
@@ -231,6 +272,7 @@ if __name__ == "__main__":
     c = Comparator()
     c.importOF()
     c.importIOS()
+    '''
     print "===================IOS-FWD-Rules:==========================="
     for key, value in c.ios_hs.iteritems():
         print '----Bucket: %s -----' % key
@@ -238,13 +280,14 @@ if __name__ == "__main__":
     print "===================OF-FWD-Rules:==========================="
     for key, value in c.of_hs.iteritems():
         print '----Bucket: %s -----' % key
-        c.printRules(value)
-        
+        c.printRules(value)'''
+
     nfr = c.compare(c.ios_hs, c.of_hs)
     _nfr = c.compare(c.of_hs, c.ios_hs)
     
     print '--------Not Found in TF1:------'
     c.printRules(nfr)
+    
     print '--------Not Found in TF2:------'
     c.printRules(_nfr)
     '''
