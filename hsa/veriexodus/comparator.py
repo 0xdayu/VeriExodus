@@ -5,9 +5,9 @@ from utils.wildcard import *
 
 
 class Comparator:
-    
+
     def __init__(self):
-        
+
         # key, value -> inports number, [rules]
         self.ios_hs = {}
         self.of_hs = {}
@@ -18,12 +18,12 @@ class Comparator:
             if key == "controller_rules":
                 continue
             tf1[key] = self.decoupleRules(value)
-            
+
         for key, value in tf2.iteritems():
             if key == "controller_rules":
                 continue
             tf2[key] = self.decoupleRules(value)
-            
+
         not_found_rules = []
         for key, value in tf1.iteritems():
             if key == "controller_rules":
@@ -36,11 +36,11 @@ class Comparator:
             else:
                 not_found_rules += value
         return not_found_rules
-            
+
     def compareRules(self, rules1, rules2):
         not_found_rules = []
-    
-#         
+
+#
         for r1 in rules1:
             #print "+++++++"
             #print str(r1['match'])
@@ -48,7 +48,7 @@ class Comparator:
             if len(r2) == 0:
                 not_found_rules.append(r1)
                 continue
-            
+
             temp = []
             temp.append(r1)
             for _r2 in r2:
@@ -59,7 +59,7 @@ class Comparator:
                     if len(intersect_part) == 0: #no overlap headerspace
                         temp.insert(0, _r1)
                         continue
-                    
+
                     substracted_match = wildcard_diff(_r1["match"], intersect_part)
                     for sm in substracted_match:
                         if sm is None:
@@ -67,28 +67,28 @@ class Comparator:
                         t = _r1.copy()
                         t["match"] = sm
                         temp.append(t)
-            
+
             if len(temp) != 0:
                 not_found_rules.append(r1)
-        
+
         #for r1 in rules1:
         #    print str(r1['match'])
         #    print '#######'
-        
+
         return not_found_rules
-                             
+
     def getHeaderSpaceWithSameActions(self, r1, rule_set): # get rules from rule_set with same inports, mask, rewrite and outports
         result = []
         for r2 in rule_set:
             if wildcard_is_equal(r1["mask"], r2["mask"]) and \
             wildcard_is_equal(r1["rewrite"], r2["rewrite"]) and \
             set(r1["out_ports"]) == set(r2["out_ports"]):
-            
+
                 #print str(r1['match'])
                 result.append(r2)
-                
+
         return result
-        
+
     def importIOS(self):
         example_folder = '../examples/Exodus_toy_example/'
         ios = cisco_router(1)
@@ -97,24 +97,24 @@ class Comparator:
         example_folder + 'ext_route.txt', \
         example_folder + 'ext_arp_table.txt')
         ios_tf = ios.generate_transfer_function()
-        
+
         #port_map = {1:3, 2:1}
         #ios_ports = lambda n: port_map[n]
-        
+
         inport_map = {1:3, 2:1}
         inport_mapper = lambda n: inport_map[n]
         outport_map = {1:3, 2:1}
         outport_mapper = lambda n: outport_map[n]
-        
+
         for rule in ios_tf.rules:
             #drop rules
             #if len(rule["out_ports"]) == 0:
             #    continue
-            
+
             #map the port number to OF
             rule["in_ports"] = map(inport_mapper, rule["in_ports"])
             rule["out_ports"] = map(outport_mapper, rule["out_ports"])
-            
+
             for inports in rule["in_ports"]:
                 if inports in self.ios_hs.keys():
                     self.ios_hs[inports] += [rule]
@@ -122,9 +122,9 @@ class Comparator:
                 else:
                     self.ios_hs[inports] = [rule]
                     #print str(rule['match'])
-        
+
     def importOF(self):
-        
+
         of_tf = generate_ext()
 
         ign_ports = lambda n: n % 2 == 0
@@ -134,22 +134,22 @@ class Comparator:
         for rule in of_tf.rules:
             for inports in rule["in_ports"]:
                 #if len(rule["out_ports"]) == 0 or ign_ports(inports) :
-                if ign_ports(inports): 
+                if ign_ports(inports):
                     continue
-                
+
                 if len(rule['out_ports']) > 0 and rule["out_ports"][0] == 65535:
                     self.of_hs["controller_rules"] += [rule]
                     #break
-                
+
                 if inports in self.of_hs.keys():
                     self.of_hs[inports] += [rule]
                 else:
                     self.of_hs[inports] = [rule]
-            
+
             '''if reduce(lambda result, n: result and not ign_ports(n), rule["in_ports"], True):
                 if len(rule["out_ports"]) == 0:
                     continue
-                
+
                 if rule["out_ports"][0] == 65535:
                     self.of_hs["controller_rules"] += [rule]
                     continue
@@ -158,7 +158,7 @@ class Comparator:
                         self.of_hs[inports] += [rule]
                     else:
                         self.of_hs[inports] = [rule]'''
-    
+
     def decoupleRules(self, rules):
         _results = []
         results = []
@@ -187,18 +187,18 @@ class Comparator:
                             t['shadowed'].append(result)
                         else:
                             t['shadowed'] = [result]
-                        
+
                         temp.append(t)
             results += temp
-            
-            
+
+
         #remove drop and controller rules
         for r in results:
             if not (len(r['out_ports']) == 0 or (65535 in r['out_ports'])):
-                _results.append(r) 
+                _results.append(r)
                 #print str(r['match'])
         return _results
-    
+
     @staticmethod
     def printRules(rules):
         for rule in rules:
@@ -210,7 +210,7 @@ class Comparator:
                 (rule['in_ports'], Comparator.parseWildcard(rule['match']), Comparator.parseWildcard(rule['mask']), \
                  Comparator.parseWildcard(rule['rewrite']), rule['out_ports'])
             print "--------------------"
-            
+
             '''
             #for debugging
             if 'generated' in rule.keys():
@@ -230,11 +230,11 @@ class Comparator:
                 print '----------------------------'
             print '********************************************************'
             '''
-            
-                
+
+
     @staticmethod
     def parseWildcard(w):
-        
+
         format = {}
         format["vlan_pos"] = 0
         format["ip_src_pos"] = 2
@@ -257,14 +257,14 @@ class Comparator:
         format["dl_dst_len"] = 6
         format["dl_proto_len"] = 2
         format["length"] = 30
-        
+
         fields = ["vlan","dl_src","dl_dst","dl_proto","ip_src","ip_dst","ip_proto","transport_src",\
           "transport_dst"]
         return wc_header_to_parsed_string(format, fields, w)
-        
-    
-                        
-    # Just for Test                        
+
+
+
+    # Just for Test
     def TestDictGen(self, rules):
         d = {}
         for rule in rules:
@@ -294,14 +294,13 @@ if __name__ == "__main__":
     for key, value in c.of_hs.iteritems():
         print '----Bucket: %s -----' % key
         c.printRules(value)'''
-    
-    
+
+
     nfr = c.compare(c.ios_hs, c.of_hs)
-    #_nfr = c.compare(c.of_hs, c.ios_hs)
-    
+    _nfr = c.compare(c.of_hs, c.ios_hs)
+
     print '--------Not Found in TF1:------'
     c.printRules(nfr)
-    
-    #print '--------Not Found in TF2:------'
-    #c.printRules(_nfr)
-    
+
+    print '--------Not Found in TF2:------'
+    c.printRules(_nfr)
