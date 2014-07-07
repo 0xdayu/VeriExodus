@@ -3,7 +3,7 @@ from utils.helper import *
 from utils.wildcard import *
 from utils.wildcard_utils import *
 
-DUMP_FILE = '../examples/Exodus_toy_example/ext-sat.txt'
+#DUMP_FILE = '../examples/Exodus_toy_example/ext-sat.txt'
 #transfer all Openflow Rules into transfer fucntions
 def convert_switches_to_tfs(h_switches, formatt):
     switch_tfs = {}
@@ -123,24 +123,28 @@ def merge_tfs(tfs, pipeline, pipeline_ports):
     return merged_tf
 
 
-def generate_ext():
-    toy_tables = set(["ext-rtr", "ext-nat", "ext-tr", "ext-acl"])
+def generate_of_tfs(route_name, dump_file):
     
+    toy_tables = set([route_name + "-rtr", route_name + "-nat", route_name + "-tr", route_name + "-acl"])
+    
+    '''
     #filter impossible inports and outports
     f_in_pt = lambda n : str(2 * n - 1)
     f_out_pt = lambda n : str(2 * n)
     f_rtr_pt = lambda n : str(n + 1)
+    '''
 
     #port mapping
     pmap_fwd = lambda n : n - 1
     pmap_rtr = lambda n : n / 2 + 1
     pmap_outrtr = lambda n : (n - 1) * 2
     pmap_bck = lambda n : n + 1
-    pipeline = ["ext-acl", "ext-tr", "ext-rtr", "ext-tr", "ext-acl"]
+    #pipeline = ["ext-acl", "ext-tr", "ext-rtr", "ext-tr", "ext-acl"]
+    pipeline = [route_name + "-acl", route_name + "-tr", route_name + "-rtr", route_name + "-tr", route_name + "-acl"]
     pipeline_ports = [pmap_fwd, pmap_rtr, pmap_outrtr, pmap_bck]
 
-    num_of_subnets = 2
-    h_switches = read_openflow_tables(toy_tables, DUMP_FILE)
+    #num_of_subnets = 2
+    h_switches = read_openflow_tables(toy_tables, dump_file)
     """
     topology = generate_topology(pipeline, num_of_subnets, f_in_pt, f_out_pt, f_rtr_pt)
     forest = generate_rule_trees(pipeline, topology, h_switches)
@@ -170,10 +174,9 @@ def generate_ext():
     formatt["dl_proto_len"] = 2
     formatt["length"] = 30
 
-    switch_tfs = dict()
-
     switch_tfs = convert_switches_to_tfs(h_switches, formatt)
 
+    '''
     # output HSA tf results:
     tfile = open("results/switch_tfs", "w")
     for rtrname in switch_tfs:
@@ -181,15 +184,14 @@ def generate_ext():
         tfile.write(str(switch_tfs[rtrname]))
         tfile.write("\n");
     tfile.close()
+    '''
 
     merged_tf = merge_tfs(switch_tfs, pipeline, pipeline_ports)
-    f = open('results/of_tf_result', 'w')
+    '''f = open('results/of_tf_result', 'w')
     f.write(str(merged_tf))
-    f.close()
+    f.close()'''
     
     return merged_tf
 
 if __name__ == "__main__":
-    generate_ext()
-
-
+    generate_of_tfs('ext')

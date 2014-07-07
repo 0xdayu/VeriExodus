@@ -89,13 +89,13 @@ class Comparator:
 
         return result
 
-    def importIOS(self):
-        example_folder = '../examples/Exodus_toy_example/'
+    def importIOS(self, table_folder):
+        #example_folder = '../examples/Exodus_toy_example/'
         ios = cisco_router(1)
-        ios.read_inputs(example_folder + 'ext_mac_table.txt',\
-        example_folder + 'ext_config.txt', \
-        example_folder + 'ext_route.txt', \
-        example_folder + 'ext_arp_table.txt')
+        ios.read_inputs(table_folder + 'mac_table.txt',\
+        table_folder + 'config.txt', \
+        table_folder + 'route.txt', \
+        table_folder + 'arp_table.txt')
         ios_tf = ios.generate_transfer_function()
 
         #port_map = {1:3, 2:1}
@@ -123,9 +123,9 @@ class Comparator:
                     self.ios_hs[inports] = [rule]
                     #print str(rule['match'])
 
-    def importOF(self):
+    def importOF(self, route_name, dump_file):
 
-        of_tf = generate_ext()
+        of_tf = generate_of_tfs(route_name, dump_file)
 
         ign_ports = lambda n: n % 2 == 0
 
@@ -190,7 +190,6 @@ class Comparator:
 
                         temp.append(t)
             results += temp
-
 
         #remove drop and controller rules
         for r in results:
@@ -283,8 +282,8 @@ class Comparator:
 
 if __name__ == "__main__":
     c = Comparator()
-    c.importOF()
-    c.importIOS()
+    c.importOF('ext','/home/dyu/veriExodus/VeriExodus/hsa/examples/Exodus_toy_example/ext/of-sat.txt')
+    c.importIOS('/home/dyu/veriExodus/VeriExodus/hsa/examples/Exodus_toy_example/ext/')
     '''
     print "===================IOS-FWD-Rules:==========================="
     for key, value in c.ios_hs.iteritems():
