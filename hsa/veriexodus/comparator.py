@@ -11,8 +11,15 @@ class Comparator:
         # key, value -> inports number, [rules]
         self.ios_hs = {}
         self.of_hs = {}
+        
+    def decompleTF(self, tf):
+        for key, value in tf.iteritems():
+            if key == "controller_rules":
+                continue
+            tf[key] = self.decoupleRules(value)
 
     def compare(self, tf1, tf2):
+        '''
         #decouple two header spaces
         for key, value in tf1.iteritems():
             if key == "controller_rules":
@@ -23,7 +30,8 @@ class Comparator:
             if key == "controller_rules":
                 continue
             tf2[key] = self.decoupleRules(value)
-
+        '''
+        
         not_found_rules = []
         for key, value in tf1.iteritems():
             if key == "controller_rules":
@@ -40,10 +48,7 @@ class Comparator:
     def compareRules(self, rules1, rules2):
         not_found_rules = []
 
-#
         for r1 in rules1:
-            #print "+++++++"
-            #print str(r1['match'])
             r2 = self.getHeaderSpaceWithSameActions(r1, rules2)
             if len(r2) == 0:
                 not_found_rules.append(r1)
@@ -71,10 +76,6 @@ class Comparator:
             if len(temp) != 0:
                 not_found_rules.append(r1)
 
-        #for r1 in rules1:
-        #    print str(r1['match'])
-        #    print '#######'
-
         return not_found_rules
 
     def getHeaderSpaceWithSameActions(self, r1, rule_set): # get rules from rule_set with same inports, mask, rewrite and outports
@@ -84,13 +85,11 @@ class Comparator:
             wildcard_is_equal(r1["rewrite"], r2["rewrite"]) and \
             set(r1["out_ports"]) == set(r2["out_ports"]):
 
-                #print str(r1['match'])
                 result.append(r2)
 
         return result
 
     def importIOS(self, table_folder):
-        #example_folder = '../examples/Exodus_toy_example/'
         ios = cisco_router(1)
         ios.read_inputs(table_folder + 'mac_table.txt',\
         table_folder + 'config.txt', \
@@ -107,9 +106,6 @@ class Comparator:
         outport_mapper = lambda n: outport_map[n]
 
         for rule in ios_tf.rules:
-            #drop rules
-            #if len(rule["out_ports"]) == 0:
-            #    continue
 
             #map the port number to OF
             rule["in_ports"] = map(inport_mapper, rule["in_ports"])
@@ -158,7 +154,7 @@ class Comparator:
                         self.of_hs[inports] += [rule]
                     else:
                         self.of_hs[inports] = [rule]'''
-
+    
     def decoupleRules(self, rules):
         _results = []
         results = []
@@ -167,6 +163,7 @@ class Comparator:
             temp.append(rule)
             for result in results:
                 size = len(temp)
+                #print result['match']
                 for i in range(size): #every decomposed headerspaces
                     currentRule = temp.pop(0)
                     intersectPart = wildcard_intersect(currentRule['match'], result['match'])
@@ -201,14 +198,17 @@ class Comparator:
     @staticmethod
     def printRules(rules):
         for rule in rules:
-            '''print "in_ports: %s, match: %s => ((h & %s) | %s, %s)" % \
+            '''
+            print "in_ports: %s, match: %s => ((h & %s) | %s, %s)" % \
                 (rule['in_ports'], rule['match'], rule['mask'], \
-                 rule['rewrite'], rule['out_ports'])'''
-
+                 rule['rewrite'], rule['out_ports'])
+            
+            '''
             print "in_ports: %s\n, match: %s\n, mask: %s\n, rewrite: %s\n, out_ports: %s\n" % \
                 (rule['in_ports'], Comparator.parseWildcard(rule['match']), Comparator.parseWildcard(rule['mask']), \
                  Comparator.parseWildcard(rule['rewrite']), rule['out_ports'])
             print "--------------------"
+
 
             '''
             #for debugging
@@ -281,25 +281,36 @@ class Comparator:
         return d
 
 if __name__ == "__main__":
+    
     c = Comparator()
-    c.importOF('ext','/home/dyu/veriExodus/VeriExodus/hsa/examples/Exodus_toy_example/ext/of-sat.txt')
-    c.importIOS('/home/dyu/veriExodus/VeriExodus/hsa/examples/Exodus_toy_example/ext/')
+    c.importOF('int','/home/dyu/veriExodus/VeriExodus/hsa/examples/Exodus_toy_example/int/of-sat.txt')
+    c.importIOS('/home/dyu/veriExodus/VeriExodus/hsa/examples/Exodus_toy_example/int/')
+    
+    c.decompleTF(c.ios_hs)
+    c.decompleTF(c.of_hs)
+    
     '''
     print "===================IOS-FWD-Rules:==========================="
     for key, value in c.ios_hs.iteritems():
         print '----Bucket: %s -----' % key
         c.printRules(value)
+    '''
+    
+    '''
     print "===================OF-FWD-Rules:==========================="
     for key, value in c.of_hs.iteritems():
         print '----Bucket: %s -----' % key
-        c.printRules(value)'''
+        c.printRules(value)
 
-
+    
+    
+    '''
     nfr = c.compare(c.ios_hs, c.of_hs)
     _nfr = c.compare(c.of_hs, c.ios_hs)
 
     print '--------Not Found in TF1:------'
     c.printRules(nfr)
 
+    
     print '--------Not Found in TF2:------'
     c.printRules(_nfr)

@@ -1,0 +1,6 @@
+Prefix              Next Hop        Interface
+10.1.1.0/24	        attached		in_dmz
+192.168.0.0/16      attached        in_lan
+192.168.1.1/32      drop
+10.1.1.1/32         drop
+10.200.0.0/16       10.1.1.2        in_dmz 
