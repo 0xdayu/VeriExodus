@@ -472,8 +472,9 @@ class cisco_router(object):
                 mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
                 rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
                 
-                macaddr = int(self.iface_mac[iface].replace('.', ''), 16)
-                set_header_field(self.hs_format, match, "dl_dst", macaddr, 0)
+                if direction.lower() == 'in':
+                    macaddr = int(self.iface_mac[iface].replace('.', ''), 16)
+                    set_header_field(self.hs_format, match, "dl_dst", macaddr, 0)
 
                 set_header_field(self.hs_format, match, "dl_proto", 0x800, 0)
 

@@ -1,5 +1,5 @@
   vlan   mac address     type    learn     age              ports
 ------+----------------+--------+-----+----------+--------------------------
-*    1  cafe.0001.0001   static   Yes          -   in_lan
 *    1  cafe.0001.0002   static   Yes          -   in_dmz
+*    1  cafe.0001.0001   static   Yes          -   in_lan
 

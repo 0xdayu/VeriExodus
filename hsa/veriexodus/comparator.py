@@ -100,9 +100,9 @@ class Comparator:
         #port_map = {1:3, 2:1}
         #ios_ports = lambda n: port_map[n]
 
-        inport_map = {1:3, 2:1}
+        inport_map = {1:1, 2:3}
         inport_mapper = lambda n: inport_map[n]
-        outport_map = {1:3, 2:1}
+        outport_map = {1:1, 2:3}
         outport_mapper = lambda n: outport_map[n]
 
         for rule in ios_tf.rules:
@@ -200,18 +200,17 @@ class Comparator:
         for rule in rules:
 
             ''' TODO: -verbose options :-) '''
-
-            '''print "in_ports: %s, match: %s => ((h & %s) | %s, %s)" % \
+            
+            '''
+            print "in_ports: %s, match: %s => ((h & %s) | %s, %s)" % \
                 (rule['in_ports'], rule['match'], rule['mask'], \
-                 rule['rewrite'], rule['out_ports'])'''
+                 rule['rewrite'], rule['out_ports'])
 
-
+            '''
             print "in_ports: %s\n, match: %s\n, mask: %s\n, rewrite: %s\n, out_ports: %s\n" % \
                 (rule['in_ports'], Comparator.parseWildcard(rule['match']), Comparator.parseWildcard(rule['mask']), \
                  Comparator.parseWildcard(rule['rewrite']), rule['out_ports'])
             print "--------------------"
-
-
 
 
             #for debugging
