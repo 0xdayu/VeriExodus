@@ -2,6 +2,7 @@ from config_parser.openflow_table_parser import read_openflow_tables, OpenFlowSw
 from utils.helper import *
 from utils.wildcard import *
 from utils.wildcard_utils import *
+from hsa_pretty_print import *
 
 #DUMP_FILE = '../examples/Exodus_toy_example/ext-sat.txt'
 #transfer all Openflow Rules into transfer fucntions
@@ -12,7 +13,7 @@ def convert_switches_to_tfs(h_switches, formatt):
     for switch_name in h_switches:
         switch = h_switches[switch_name]
         tf = TF(formatt["length"])
-        
+
         # convert match rules
         for rule in switch.table_rows:
             outports = list()
@@ -20,7 +21,7 @@ def convert_switches_to_tfs(h_switches, formatt):
             mask    = wildcard_create_bit_repeat(formatt["length"], 0x2)
             rewrite = wildcard_create_bit_repeat(formatt["length"], 0x1)
             action_all = False
-            
+
             # create "match" by piecing together requirements
             # "dl_src", "dl_dst",
             # left side is OF's name,  right side is HSA's name
@@ -51,7 +52,7 @@ def convert_switches_to_tfs(h_switches, formatt):
                     else:
                         # port or protocol
                         set_header_field(formatt, match, hsaFieldName, val, 0)
-            
+
             # parse actions into mask/rewrite/outport
             for action in rule.act_list:
                 # get out-ports
@@ -66,7 +67,7 @@ def convert_switches_to_tfs(h_switches, formatt):
                     new_mask = wildcard_create_bit_repeat(formatt["dl_dst_len"], 0x01)
                     set_wildcard_field(formatt, mask, "dl_dst", new_mask, 0)
                     set_header_field(formatt, rewrite, "dl_dst", mac_to_int(action.new_value), 0)
-                    
+
                 if action.act_enum == OpenFlowSwitch.Action.ACTION_MOD_NW_SRC:
                     new_mask = wildcard_create_bit_repeat(formatt["ip_src_len"], 0x01)
                     if is_ip_subnet(action.new_value):
@@ -87,7 +88,7 @@ def convert_switches_to_tfs(h_switches, formatt):
                         set_header_field(formatt, rewrite, "ip_dst", dotted_ip_to_int(action.new_value), 0)
                         set_wildcard_field(formatt, mask, "ip_dst", new_mask, 0)
 
-                
+
                 if action.act_enum == OpenFlowSwitch.Action.ACTION_ALL:
                     action_all = True
 
@@ -103,12 +104,12 @@ def convert_switches_to_tfs(h_switches, formatt):
             converted_rule = TF.create_standard_rule(inports, match, outports, mask, rewrite)
             converted_rule["action_all"] = action_all
             tf.add_rewrite_rule(converted_rule)
-        
+
         # complete tf:
         switch_tfs[switch_name] = tf
 
     return switch_tfs
-    
+
 def merge_tfs(tfs, pipeline, pipeline_ports):
     # merge based on pipeline
     merged_tf = tfs[pipeline[0]]
@@ -124,9 +125,9 @@ def merge_tfs(tfs, pipeline, pipeline_ports):
 
 
 def generate_of_tfs(route_name, dump_file):
-    
+
     toy_tables = set([route_name + "-rtr", route_name + "-nat", route_name + "-tr", route_name + "-acl"])
-    
+
     '''
     #filter impossible inports and outports
     f_in_pt = lambda n : str(2 * n - 1)
@@ -176,21 +177,22 @@ def generate_of_tfs(route_name, dump_file):
 
     switch_tfs = convert_switches_to_tfs(h_switches, formatt)
 
-    '''
+
     # output HSA tf results:
     tfile = open("results/switch_tfs", "w")
     for rtrname in switch_tfs:
-        tfile.write("==============" + rtrname + "==============\n")
-        tfile.write(str(switch_tfs[rtrname]))
+        tfile.write("==============" + rtrname + "(" + str(len(switch_tfs[rtrname].rules)) + ")" "==============\n")
+        printTFToFile(tfile, switch_tfs[rtrname])
+        #tfile.write(str(switch_tfs[rtrname]))
         tfile.write("\n");
     tfile.close()
-    '''
+
 
     merged_tf = merge_tfs(switch_tfs, pipeline, pipeline_ports)
     '''f = open('results/of_tf_result', 'w')
     f.write(str(merged_tf))
     f.close()'''
-    
+
     return merged_tf
 
 if __name__ == "__main__":
