@@ -1,9 +1,9 @@
 '''
   <Cisco IOS parser --- Exodus Edition. Generates Transfer Function Objects>
-  
+
   only support: static routing
                 static acls
-                
+
   The file is based on the original CISCO parser developed by Stanford University.
 
 Created on May 2, 2014
@@ -16,15 +16,16 @@ from headerspace.tf import *
 from headerspace.hs import *
 from utils.wildcard import *
 from utils.helper import *
+from hsa_pretty_print import *
 
 import re
 
 NO_ETHERTYPE = 0
 
 class cisco_router(object):
-    
+
     def __init__(self, switch_id):
-        
+
         # for each acl number has a list of acl dictionary entries
         self.acl = {}
         # arp table: ip-->(mac)
@@ -36,7 +37,7 @@ class cisco_router(object):
         self.ifaces_wo_in = []
         # interfaces without "out" ACLs
         self.ifaces_wo_out = []
-        
+
         # interface name -> mac
         self.iface_mac = {}
 
@@ -52,10 +53,10 @@ class cisco_router(object):
 
         self.ID = 1;
         self.interface_ids = {}
-    
+
         # dict(subnet -> list of (next_hop, interface))
         self.routes = {}
-        
+
     @staticmethod
     def HS_FORMAT():
         format = {}
@@ -81,7 +82,7 @@ class cisco_router(object):
         format["dl_proto_len"] = 2
         format["length"] = 30
         return format
-    
+
     @staticmethod
     def make_acl_dictionary_entry():
         entry = {}
@@ -99,7 +100,7 @@ class cisco_router(object):
         entry["transport_ctrl_end"] = 0xff
         entry["etherType"] = 0
         return entry
-    
+
     @staticmethod
     def get_protocol_number(proto_name):
         dict = {"ah":51, "eigrp":88, "esp":50, "gre":47, "icmp":1, "igmp":2, \
@@ -113,7 +114,7 @@ class cisco_router(object):
                 return num
             except Exception as e:
                 return None
-            
+
     @staticmethod
     def get_udp_port_number(port_name):
         dict = {"biff": 512, "bootpc":68, "bootps":69, "discard":9, \
@@ -130,7 +131,7 @@ class cisco_router(object):
                 return num
             except Exception as e:
                 return None
-    
+
     @staticmethod
     def get_transport_port_number(port_name):
         dict = {"bgp":179, "chargen":19, "daytime":13, "discard":9, \
@@ -148,14 +149,14 @@ class cisco_router(object):
                 return num
             except Exception as e:
                 return None
-    
+
     def get_port_id(self, interface):
         if interface not in self.interface_ids:
             self.interface_ids[interface] = self.ID
             self.ID = self.ID + 1
 
         return self.interface_ids[interface]
-    
+
     def parse_access_list_entry(self, entry, line_counter, acl_standard):
         def parse_ip(lst):
             result = {}
@@ -178,18 +179,18 @@ class cisco_router(object):
                     result["ip_mask"] = 0
                     lst.pop(0)
             return result
-    
+
         def parse_port(lst, proto):
             result = {}
             proto_reader = None
-              
+
             if proto == 6:
                 proto_reader = cisco_router.get_transport_port_number
             elif proto == 17:
                 proto_reader = cisco_router.get_udp_port_number
             else:
                 proto_reader = cisco_router.get_transport_port_number
-                
+
             if lst[0] == "eq":
                 lst.pop(0)
                 p = proto_reader(lst.pop(0))
@@ -209,25 +210,25 @@ class cisco_router(object):
                 if p1 != None and p2 != None:
                     result["port_begin"] = p1
                     result["port_end"] = p2
-              
+
             return result
-        
+
         tokens = entry.split()
         tokens.pop(0)
         acl_number = tokens.pop(0)
-        
+
         action = tokens.pop(0)
         if action.lower() == "permit" or action.lower() == "deny": #only handle permit and deny
             if not acl_number in self.acl.keys():
                 self.acl[acl_number] = []
-            
+
             new_entry = self.make_acl_dictionary_entry()
             new_entry["action"] = (action.lower() == "permit")
-             
+
         # standard access-list entry
         if acl_standard:
             new_entry["ip_protocol"] = 0
-            new_entry["etherType"] = 0x0800 
+            new_entry["etherType"] = 0x0800
             new_ip = parse_ip(tokens)
             if (len(new_ip.keys()) > 0):
                 new_entry["src_ip"] = new_ip["ip"]
@@ -237,7 +238,7 @@ class cisco_router(object):
                 return True
             else:
                 return False
-      
+
         # extended access-list entry
         else:
             new_entry["ip_protocol"] = 0
@@ -248,7 +249,7 @@ class cisco_router(object):
                     self.get_protocol_number(tokens.pop(0)))
             #else:
             #    return False
-            
+
             # src ip address and ip mask
             new_ip = parse_ip(tokens)
             if (len(new_ip.keys()) > 0):
@@ -262,14 +263,14 @@ class cisco_router(object):
                     new_entry["transport_src_begin"] = \
                         new_ports["port_begin"]
                     new_entry["transport_src_end"] = new_ports["port_end"]
-          
-            # dst ip address and ip mask  
+
+            # dst ip address and ip mask
             if len(tokens) > 0:
                 new_ip = parse_ip(tokens)
                 if (len(new_ip.keys()) > 0):
                     new_entry["dst_ip"] = new_ip["ip"]
                     new_entry["dst_ip_mask"] = new_ip["ip_mask"]
-            
+
             # dst transport port number
             if len(tokens) > 0:
                 new_ports = parse_port(tokens, new_entry["ip_protocol"])
@@ -277,21 +278,21 @@ class cisco_router(object):
                     new_entry["transport_dst_begin"] = \
                       new_ports["port_begin"]
                     new_entry["transport_dst_end"] = new_ports["port_end"]
-            
+
             # transport control bits
             if len(tokens) > 0:
                 t = tokens.pop(0)
                 if t == "established":
                     new_entry["transport_ctrl_begin"] = 0x80
                     new_entry["transport_ctrl_end"] = 0xff
-            
+
             new_entry["line"] = [line_counter];
             self.acl[acl_number].append(new_entry)
             #print self.acl_dictionary_entry_to_string(new_entry)
             return True
-            
-        
-    
+
+
+
     def parse_interface_config(self,iface_info,file_path):
 
         iface_decl = iface_info[0][0].split()
@@ -318,7 +319,7 @@ class cisco_router(object):
             self.ifaces_wo_in.append(iface)
         if not has_out:
             self.ifaces_wo_out.append(iface)
-    
+
     def read_config_file(self, file_path):
         print "=== Reading Cisco Router Config File ==="
         f = open(file_path,'r')
@@ -330,7 +331,7 @@ class cisco_router(object):
         line_counter = 0
         for line in f:
             line = line.strip()
-            # read an access-list line 
+            # read an access-list line
             if line.startswith("access-list"):
                 reading_ipacl = False
                 reading_iface = True
@@ -348,7 +349,7 @@ class cisco_router(object):
             elif reading_ipacl and (line.startswith("permit") or line.startswith("deny")):
                 entry = "access-list %s %s" % (ipacl_start, line);
                 self.parse_access_list_entry(entry,line_counter, ipacl_std)
-                
+
                 # read interface config
             elif line.startswith("interface"):
                 reading_ipacl = False
@@ -380,10 +381,10 @@ class cisco_router(object):
         lines = f.readlines()[1:]
         for line in lines:
             line = line.strip().split()
-            
+
             subnet   = line[0]
             next_hop = line[1]
-            
+
             if subnet not in self.routes:
                 self.routes[subnet] = []
 
@@ -391,30 +392,30 @@ class cisco_router(object):
                 self.routes[subnet].append(("drop", None))
             else:
                 self.routes[subnet].append((next_hop, line[2]))
-        
+
     def read_arp_table_file(self, file_path):
         print "=== Reading Cisco Router Config File ==="
         f = open(file_path, 'r')
         lines = f.readlines()[1:]
         for line in lines:
             line = line.strip().split()
-            
+
             ipaddr  = line[1]
             macaddr = line[3]
             self.arp_table[ipaddr] = int(macaddr.replace('.', ''), 16)
-            
+
         print "=== DONE Reading Cisco ARP Table File ==="
-        
+
     def generate_transfer_function(self):
         def generate_acl_tf(direction, bypass_ifaces):
             tf_acl = TF(self.hs_format["length"])
             for acl_num in self.acl:
                 acl_rules = self.acl[acl_num]
-                
+
                 # current acl not used on any interfaces
                 if acl_num not in self.acl_iface:
                     continue
-                
+
                 # get inports through interfaces
                 inports = set()
                 for iface_info in self.acl_iface[acl_num]:
@@ -431,7 +432,7 @@ class cisco_router(object):
                         match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
                         mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
                         rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
-                        
+
                         macaddr = int(self.iface_mac[iface_info[0]].replace('.', ''), 16)
                         set_header_field(self.hs_format, match, "dl_dst", macaddr, 0)
 
@@ -444,17 +445,17 @@ class cisco_router(object):
 
                         if rule["ip_protocol"]:
                             set_header_field(self.hs_format, match, "ip_proto", rule["ip_protocol"], 0)
-        
+
                         # IPS
                         set_masked(match, "ip_src", rule["src_ip_mask"], rule["src_ip"])
                         set_masked(match, "ip_dst", rule["dst_ip_mask"], rule["dst_ip"])
-        
+
                         # TRANSPORT_PORT
                         set_range(match, "transport_src", rule["transport_src_begin"], rule["transport_src_end"])
                         set_range(match, "transport_dst", rule["transport_dst_begin"], rule["transport_dst_end"])
-        
+
                         set_range(match, "transport_ctrl", rule["transport_ctrl_begin"], rule["transport_ctrl_end"])
-        
+
                         if rule["action"]:
                             # permit
                             for i in inports:
@@ -464,14 +465,14 @@ class cisco_router(object):
                             # deny
                             tfrule = TF.create_standard_rule(inports, match, [], mask, rewrite)
                             tf_acl.add_rewrite_rule(tfrule)
-    
+
             # add interfaces without in, let them bypass
             for iface in bypass_ifaces:
                 iport = self.get_port_id(iface)
                 match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
                 mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
                 rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
-                
+
                 if direction.lower() == 'in':
                     macaddr = int(self.iface_mac[iface].replace('.', ''), 16)
                     set_header_field(self.hs_format, match, "dl_dst", macaddr, 0)
@@ -489,10 +490,10 @@ class cisco_router(object):
             elif start == end:
                 set_header_field(self.hs_format, wc, fieldname, start, 0)
             # TODO: handle ranges
-        
+
         def set_masked(wc, fieldname, mask, val):
             set_header_field(self.hs_format, wc, fieldname, val, find_num_mask_bits_right_mak(mask))
-        
+
         #-------------------------- IN ACL --------------------------
         tf_in_acl = generate_acl_tf("in", self.ifaces_wo_in)
 
@@ -503,9 +504,9 @@ class cisco_router(object):
             [subnetIp, subnetMask] = dotted_subnet_to_int(subnet)
             if subnetMask not in sizes:
                 sizes[subnetMask] = []
-            
+
             sizes[subnetMask].append(subnet)
-            
+
         #longest prefix-matching
         for i in range(32, -1, -1):
             if i not in sizes:
@@ -513,13 +514,13 @@ class cisco_router(object):
 
             for subnet in sizes[i]:
                 [subnetIp, subnetMask] = dotted_subnet_to_int(subnet)
-                    
+
                 for route in self.routes[subnet]:
                     inports = []
                     match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
                     mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
                     rewrite = wildcard_create_bit_repeat(self.hs_format["length"], 0x1)
-                    
+
                     set_header_field(self.hs_format, match, "ip_dst", subnetIp, 32 - subnetMask)
 
                     if route[0].lower() == "drop":
@@ -532,7 +533,7 @@ class cisco_router(object):
                     # mask
                     repmask = wildcard_create_bit_repeat(self.hs_format["dl_src_len"], 0x1)
                     set_wildcard_field(self.hs_format, mask, "dl_src", repmask, 0)
-                    
+
                     # rewrite
                     macaddr = int(self.iface_mac[route[1]].replace('.', ''), 16)
                     set_header_field(self.hs_format, rewrite, "dl_src", macaddr, 0)
@@ -553,10 +554,10 @@ class cisco_router(object):
                                 # mask
                                 replacemask = wildcard_create_bit_repeat(self.hs_format["dl_dst_len"], 0x1)
                                 set_wildcard_field(self.hs_format, newmask, "dl_dst", replacemask, 0)
-                                
+
                                 macaddr = self.arp_table[ip]
                                 set_header_field(self.hs_format, newrewrite, "dl_dst", macaddr, 0)
-        
+
                                 tfrule = TF.create_standard_rule(inports, newmatch, outports, newmask, newrewrite)
                                 tf_rtr.add_rewrite_rule(tfrule)
                     else:
@@ -566,18 +567,18 @@ class cisco_router(object):
                         # get MAC of next hop
                         macaddr = self.arp_table[route[0]]
                         set_header_field(self.hs_format, rewrite, "dl_dst", macaddr, 0)
-        
+
                         tfrule = TF.create_standard_rule(inports, match, outports, mask, rewrite)
                         tf_rtr.add_rewrite_rule(tfrule)
-                    
+
         #-------------------------- OUT ACL --------------------------
         tf_out_acl = generate_acl_tf("out", self.ifaces_wo_out)
 
-        
+
         #--------------------------- MERGE ---------------------------
         tf_inacl_rtr = TF.merge_tfs(tf_in_acl, tf_rtr, TF.id_port_mapper)
         tf_full = TF.merge_tfs(tf_inacl_rtr, tf_out_acl, TF.id_port_mapper)
-        
+
         # add implicit all drop
         match   = wildcard_create_bit_repeat(self.hs_format["length"], 0x3)
         mask    = wildcard_create_bit_repeat(self.hs_format["length"], 0x2)
@@ -602,9 +603,9 @@ class cisco_router(object):
 
 def write_file(fname, tf):
     f = open('results/' + fname, 'w')
-    f.write(str(tf))
+    printTFToFile(f, tf)
     f.close()
-        
+
 if __name__ == "__main__":
     cs = cisco_router(1)
     example_folder = '../examples/Exodus_toy_example/'

@@ -118,6 +118,8 @@ def merge_tfs(tfs, pipeline, pipeline_ports):
         merged_tf = TF.merge_tfs(merged_tf, switch, pipeline_ports[i - 1])
 
         f = open("results/of_merge_" + str(i), 'w')
+        f.write("Merge "+str(i)+"\n")
+        #printTFToFile(f, merged_tf)
         f.write(str(merged_tf))
         f.close()
 
@@ -182,8 +184,8 @@ def generate_of_tfs(route_name, dump_file):
     tfile = open("results/switch_tfs", "w")
     for rtrname in switch_tfs:
         tfile.write("==============" + rtrname + "(" + str(len(switch_tfs[rtrname].rules)) + ")" "==============\n")
-        printTFToFile(tfile, switch_tfs[rtrname])
-        #tfile.write(str(switch_tfs[rtrname]))
+        #printTFToFile(tfile, switch_tfs[rtrname])
+        tfile.write(str(switch_tfs[rtrname]))
         tfile.write("\n");
     tfile.close()
 

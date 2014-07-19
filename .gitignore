@@ -10,3 +10,4 @@
 *.json
 .project
 .pydevproject
+hsa/veriexodus/results/*
