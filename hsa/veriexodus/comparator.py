@@ -164,28 +164,26 @@ class Comparator:
         sys.stdout.flush()
         for rule in rules:
             print "Processing rule..."
-            temp = [] # fragments of original rule that survive shadowing
+            temp = [] # fragments of original rule that survive shadowing. really a *set*, not a list
             temp.append(rule)
             for higher in results:
-                print "higher..."
-                #print result['match']
-                for i in range(len(temp)): # for every fragment generated so far, check for shadowing
+                newfragments = [] # result of this stage of splitting
+
+                for i in range(len(temp)): # for every fragment generated as of last iteration, check for shadowing
                     print "i = ", i, " in temp... len = ", len(temp)
                     print "temp[0]['match'] = ", str(temp[0]['match'])
-                    sys.stdout.flush()
-                    currentRule = temp.pop(0)
+                    currentRule = temp[i]
                     if(len(temp) > 0):
                         print "mod temp[0]['match'] = ", str(temp[0]['match'])
                     intersectPart = wildcard_intersect(currentRule['match'], higher['match'])
 
-                    #no intersect parts
+                    # no intersect parts
                     if (len(intersectPart) == 0):
-                        temp.insert(0, currentRule) # ??? why insert at 0? Is that safe given the pop(0) above?
-                        print "no intersect. new temp[0] = ", str(temp[0]['match'])
+                        newfragments.append(currentRule) # no modifications to this element of temp
                         continue # move to next element of temp
 
-                    tempWildcard = wildcard_diff(currentRule['match'], intersectPart)
-                    for tw in tempWildcard:
+                    newWildcards = wildcard_diff(currentRule['match'], intersectPart)
+                    for tw in newWildcards:
                         if tw is None:
                             continue
                         t = currentRule.copy()
@@ -197,7 +195,10 @@ class Comparator:
                         else:
                             t['shadowed'] = [higher]
                         # new decorrelated piece of header-space
-                        temp.append(t)
+                        newfragments.append(t)
+                # done looping: newfragments now holds the latest results
+                temp = newfragments
+            # done splitting this rule
             results += temp
 
         #remove drop and controller rules --> filtered_results
