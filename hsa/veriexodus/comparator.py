@@ -170,7 +170,7 @@ class Comparator:
                 print "higher..."
                 #print result['match']
                 for i in range(len(temp)): # for every fragment generated so far, check for shadowing
-                    print "i in temp... len = ", len(temp)
+                    print "i = ", i, " in temp... len = ", len(temp)
                     print "temp[0]['match'] = ", str(temp[0]['match'])
                     sys.stdout.flush()
                     currentRule = temp.pop(0)
@@ -182,7 +182,8 @@ class Comparator:
                     if (len(intersectPart) == 0):
                         temp.insert(0, currentRule) # ??? why insert at 0? Is that safe given the pop(0) above?
                         print "no intersect. new temp[0] = ", str(temp[0]['match'])
-                        continue
+                        continue # move to next element of temp
+
                     tempWildcard = wildcard_diff(currentRule['match'], intersectPart)
                     for tw in tempWildcard:
                         if tw is None:
