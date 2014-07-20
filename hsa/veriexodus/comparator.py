@@ -155,22 +155,33 @@ class Comparator:
                     else:
                         self.of_hs[inports] = [rule]'''
 
+# "temp", "results", "result" "_result", ... ?
     def decoupleRules(self, rules):
-        _results = []
-        results = []
+        print "In decoupleRules... size=", len(rules)
+        filtered_results = []
+        results = [] # build up decorrelated rule-set
+        print "..."
+        sys.stdout.flush()
         for rule in rules:
-            temp = []
+            print "Processing rule..."
+            temp = [] # fragments of original rule that survive shadowing
             temp.append(rule)
-            for result in results:
-                size = len(temp)
+            for higher in results:
+                print "higher..."
                 #print result['match']
-                for i in range(size): #every decomposed headerspaces
+                for i in range(len(temp)): # for every fragment generated so far, check for shadowing
+                    print "i in temp... len = ", len(temp)
+                    print "temp[0]['match'] = ", str(temp[0]['match'])
+                    sys.stdout.flush()
                     currentRule = temp.pop(0)
-                    intersectPart = wildcard_intersect(currentRule['match'], result['match'])
+                    if(len(temp) > 0):
+                        print "mod temp[0]['match'] = ", str(temp[0]['match'])
+                    intersectPart = wildcard_intersect(currentRule['match'], higher['match'])
 
                     #no intersect parts
                     if (len(intersectPart) == 0):
-                        temp.insert(0, currentRule)
+                        temp.insert(0, currentRule) # ??? why insert at 0? Is that safe given the pop(0) above?
+                        print "no intersect. new temp[0] = ", str(temp[0]['match'])
                         continue
                     tempWildcard = wildcard_diff(currentRule['match'], intersectPart)
                     for tw in tempWildcard:
@@ -181,19 +192,20 @@ class Comparator:
                         #for debugging use
                         t['generated'] = rule
                         if 'shadowed' in t.keys():
-                            t['shadowed'].append(result)
+                            t['shadowed'].append(higher)
                         else:
-                            t['shadowed'] = [result]
-
+                            t['shadowed'] = [higher]
+                        # new decorrelated piece of header-space
                         temp.append(t)
             results += temp
 
-        #remove drop and controller rules
+        #remove drop and controller rules --> filtered_results
         for r in results:
             if not (len(r['out_ports']) == 0 or (65535 in r['out_ports'])):
-                _results.append(r)
+                filtered_results.append(r)
                 #print str(r['match'])
-        return _results
+
+        return filtered_results
 
 
 
@@ -230,6 +242,8 @@ if __name__ == "__main__":
 
     c.decompleTF(c.ios_hs)
     c.decompleTF(c.of_hs)
+
+    sys.exit()
 
     print "Done decorrelating..."
 
