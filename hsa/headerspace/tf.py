@@ -182,7 +182,7 @@ class TF(object):
     def id_port_mapper(port):
         return port
 
-    
+
     @staticmethod
     def bck_port_mapper(port):
         return port + 1
@@ -194,7 +194,7 @@ class TF(object):
     @staticmethod
     def merge_tfs(tf1, tf2, port_mapper):
         rtf = TF(tf1.length)
-        
+
         for r1 in tf1.rules:
             # goes to controller? copy over directly
             if CTLR_PORT in r1["out_ports"]:
@@ -218,16 +218,16 @@ class TF(object):
 
 
         return rtf
-   
+
     @staticmethod
     def merge_rule(r1, r2, port_mapper):
         #pipeline inports and outports
         outport = set(map(port_mapper, r1["out_ports"]))
         inport = set(r2["in_ports"])
-        
+
         new_tf = TF(r1["match"].length)
         rewritten_match = TF.rewrite_hsa(r1["match"], r1["mask"], r1["rewrite"])
-        
+
         rules_match = TF.is_match(rewritten_match, r2["match"])
         #TODO:Something wrong with all and need to be fixed
         if "action_all" in r1 and r1["action_all"]:
@@ -236,7 +236,7 @@ class TF(object):
         else:
             # either inport -> outport, or inport is all packets,
             rules_match = rules_match and (len(outport.intersection(inport)) > 0 or len(inport) == 0)
-        
+
         if rules_match:
             # merge r1 and r2
             new_inports  = r1["in_ports"]
@@ -245,10 +245,10 @@ class TF(object):
             new_mask     = TF.merge_mask(r1["mask"], r2["mask"])
             new_rewrite  = TF.merge_rewrite(r1["rewrite"], r2["mask"], r2["rewrite"])
             new_rule = TF.create_standard_rule(new_inports, new_match, new_outports, new_mask, new_rewrite)
-            
+
             if "action_all" in r2 and r2["action_all"]:
                 new_rule["action_all"] = True
-            
+
             return new_rule
 
     # rewrite first match to compare with second match
@@ -256,28 +256,28 @@ class TF(object):
     def rewrite_hsa(match, mask, rewrite):
         res = wildcard_rewrite(match, mask, rewrite)
         return res[0]
-    
+
     # returns subset match of outer matching on inner
     @staticmethod
     def is_match(outer, inner):
         return len(wildcard_intersect(outer, inner)) > 0
-    
+
     @staticmethod
     def merge_match(match1, mask1, rewrite1, match2):
         result = wildcard_copy(match1)
-        
+
         for i in range(len(match1)):
             # TODO: make faster by using wildcard functions
-            
+
             resultbyte = 0
-            
+
             for j in range(0, 16, 2):
                 #resultbyte = resultbyte << 2
 
                 matchbit = (match1[i] >> j) % 4
                 maskbit  = (mask1[i] >> j) % 4
                 match2bit= (match2[i] >> j) % 4
-                
+
                 if (matchbit == 0x1 or matchbit == 0x2):
                     # has to match first rule
                     resultbyte = resultbyte | (matchbit << j)
@@ -291,9 +291,9 @@ class TF(object):
                         resultbyte = resultbyte | (match2bit << j)
 
             result[i] = resultbyte
-        
+
         return result
-    
+
     @staticmethod
     def merge_mask(mask1, mask2):
         return wildcard_and(mask1, mask2)
@@ -301,8 +301,8 @@ class TF(object):
     @staticmethod
     def merge_rewrite(rw1, mask2, rw2):
         return wildcard_rewrite(rw1, mask2, rw2)[0]
-        
-    
+
+
     @staticmethod
     def create_custom_rule(match, transform, inv_match, inv_transform, \
                            file_name = None, lines = []):
@@ -510,15 +510,15 @@ class TF(object):
                #wildcard_is_equal(rule["mask"], r["mask"]) and \
                #wildcard_is_equal(rule["rewrite"], r["rewrite"]) and \
                #set(rule["out_ports"]) == set(r["out_ports"]):
-                
+
                 if len(r["in_ports"]) == 0 or len(rule["in_ports"]) == 0:
                     r["in_ports"] = []
                 else:
                     r["in_ports"] = list(set(r["in_ports"]).union(rule["in_ports"]))
-                
+
                 # don't add, already merged with existing rule
                 return
-        
+
         # Mask rewrite
         rule['rewrite'] = wildcard_and(\
                                                 wildcard_not(rule['mask']),\
@@ -706,10 +706,63 @@ class TF(object):
                         result.append((out_hs,out_ports))
         return result
 
-    def T(self,hs,port):
+
+    def T(self, hs, port):
         '''
         returns a list of (hs, list of output ports) as a result of applying
         transfer function.
+        '''
+        result = []
+        for r in self.Tplus(hs, port):
+            # Tplus returns
+            result.append((r[1], r[2]))
+        return result
+
+    # When does this rule apply?
+    # Applicability will differ depending on input port
+    # Returns: a dictionary mapping input ports to pre-image HSs
+    def get_applies_hs_per_port(self, rule):
+        shadowtopes = {}
+        # two options: lazy and eager. "minus" is the eager; diff_hs would be the lazy.
+        # Is lazy good enough for us? Maybe.
+        for aff in rule['affected_by']:
+            #print "  shadow intersection: ", aff[1]
+            #print "  on ports: ", aff[2]
+            for affpt in aff[2]:
+                if(affpt not in shadowtopes.keys()):
+                    shadowtopes[affpt] = []
+                    #shadowtopes[affpt] = headerspace(self.length)
+                #shadowtopes[affpt].add_hs(aff[1])
+                shadowtopes[affpt].append(aff[1])
+
+        #print "shadowtopes = "
+        #for k in shadowtopes.keys():
+        #    print k, ": ", shadowtopes[k]
+        topes = {}
+        for inp in rule['in_ports']:
+            topes[inp] = headerspace(self.length)
+            topes[inp].add_hs(rule['match'])
+            if inp in shadowtopes.keys():
+                #topes[inp] = topes[inp].copy_minus(shadowtopes[inp])
+                #topes[inp].minus(shadowtopes[inp])
+                for wc in shadowtopes[inp]:
+                    topes[inp].diff_hs(wc)
+        #print "topes = "
+        #for k in topes.keys():
+        #    print k, ": ", topes[k]
+        return topes
+
+    def length():
+        return length
+
+    def Tplus(self,hs,port):
+        '''
+        modified version of former T. Now returns an extra tuple element that
+        contains the pre-image of each image (i.e., the portion of the input
+        header-space that will produce the output mod and outport)
+        First element of each tuple: a dictionary mapping in-ports to pre-image lists
+
+        TODO: so far the extra element is only added for rewrite rules!
         '''
         result = []
         applied_rules = []
@@ -738,16 +791,27 @@ class TF(object):
                 lazy_tf_rule_ids.append(rule["id"])
                 lazy_hs = hs.copy()
                 lazy_hs.add_lazy_tf_rule(self,rule["id"],port)
+                #print "lazy: ",lazy_hs, rule["out_ports"]
                 result.append(lazy_hs,rule["out_ports"])
             # link rule
             elif rule['action'] == "link":
+                #print rule['match'], "L->", self.apply_link_rule(rule, hs, port)
                 result.extend(self.apply_link_rule(rule, hs, port))
             # rewrite rule
             elif rule['action'] == "rw":
-                result.extend(self.apply_rewrite_rule(rule, hs, port,\
-                                                      applied_rules))
+                vals = self.apply_rewrite_rule(rule, hs, port,\
+                                                      applied_rules)
+                print "vals: ", vals
+                for v in vals:
+                    if(v[1] == [65535]):
+                        print "skipping ctrler"
+                    else:
+                        print "calling get_applies_hs_per_port ...", v
+                        result.append((self.get_applies_hs_per_port(rule), v[0], v[1]))
+
             # forward rule
             elif rule['action'] == "fwd":
+                #print rule['match'], "F->", self.apply_fwd_rule(rule, hs, port,applied_rules)
                 result.extend(self.apply_fwd_rule(rule, hs, port,applied_rules))
 
         #lazy tf rules:

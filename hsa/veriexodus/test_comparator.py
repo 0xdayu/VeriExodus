@@ -175,13 +175,17 @@ class Test(unittest.TestCase):
         w3 = wildcard_create_from_string("xxxxxxx1")
 
         allwc = wildcard_create_from_string("xxxxxxxx")
+        # don't use x in mask! 1 = keep, 0 = replace
+        mask = wildcard_create_from_string("00xxxxxx")
+        # only first two will be replaced (from mask)
+        replace = wildcard_create_from_string("11000000")
 
         tf.add_rewrite_rule(TF.create_standard_rule([1], w1, [2], \
-                                                allwc, allwc))
+                                                mask, replace))
         tf.add_rewrite_rule(TF.create_standard_rule([1], w2, [2], \
-                                                allwc, allwc))
+                                                mask, replace))
         tf.add_rewrite_rule(TF.create_standard_rule([1], w3, [2], \
-                                                allwc, allwc))
+                                                mask, replace))
 
         # BUG:
         # 11xxxxxx
@@ -196,12 +200,36 @@ class Test(unittest.TestCase):
         result = c.decoupleRules(d[1])
 
         # The affected by etc. fields lead to very expensive string construction
-        for r in result:
-            print r['match']
+        #for r in result:
+        #    print r['match']
+        #    for aff in r['affected_by']:
+        #        print "0: ",aff[0]
+        #        print "1: ",aff[1]
+        #        print "2: ",aff[2]
+        #print ""
+        print "~~~~~~~~~~"
+        tesths = headerspace(1)
+        tesths.add_hs(wildcard_create_from_string("0xxxxxx1"))
+        print "testing input (pt 1) with hs: ", tesths
+        # list of (headerspace, outport) tuples
+        # produced by this transfer function when given tesths, arriving on port 1
+        outs = tf.T(tesths,1)
+        print "outs:", outs
+
+        for out in outs:
+            print out[0], ",", out[1]
+        print "~~~~~~~~~~" # out[0] seems to be mod? 2 chunks for 2 rules?
+
+        # want to say "xxx -> [yyy, zzz, ...]"
+        # but how to tell WHICH portions of xxx go where?
+
+        testplus = tf.Tplus(tesths, 1)
+        print "*****************"
+        print testplus
 
         self.assertEqual(len(result), 4)
         w4 = wildcard_create_from_string("00xxxxx1")
-        self.assert_(Test.rule_is_equal(result[3], TF.create_standard_rule([1], w4, [2], allwc, allwc)))
+        self.assert_(Test.rule_is_equal(result[3], TF.create_standard_rule([1], w4, [2], mask, replace)))
 
 
 if __name__ == "__main__":

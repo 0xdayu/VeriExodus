@@ -131,7 +131,6 @@ class headerspace(object):
         represent a [0,1,x,z] string showing the header space.
         '''
         strings = []
-
         for i in range(len(self.hs_list)):
             hs = self.hs_list[i]
             if len(self.hs_diff[i]) == 1:

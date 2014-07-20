@@ -11,6 +11,9 @@ class Comparator:
         # key, value -> inports number, [rules]
         self.ios_hs = {}
         self.of_hs = {}
+        self.of_tf = None
+        self.ios_tf = None
+        self.length = None
 
     def decompleTF(self, tf):
         for key, value in tf.iteritems():
@@ -95,7 +98,10 @@ class Comparator:
         table_folder + 'config.txt', \
         table_folder + 'route.txt', \
         table_folder + 'arp_table.txt')
-        ios_tf = ios.generate_transfer_function()
+        self.ios_tf = ios.generate_transfer_function()
+
+        if self.length == None:
+            self.length = self.ios_tf.length
 
         #port_map = {1:3, 2:1}
         #ios_ports = lambda n: port_map[n]
@@ -105,7 +111,7 @@ class Comparator:
         outport_map = {1:1, 2:3}
         outport_mapper = lambda n: outport_map[n]
 
-        for rule in ios_tf.rules:
+        for rule in self.ios_tf.rules:
 
             #map the port number to OF
             rule["in_ports"] = map(inport_mapper, rule["in_ports"])
@@ -121,13 +127,16 @@ class Comparator:
 
     def importOF(self, route_name, dump_file):
 
-        of_tf = generate_of_tfs(route_name, dump_file)
+        self.of_tf = generate_of_tfs(route_name, dump_file)
+
+        if self.length == None:
+            self.length = self.of_tf.length
 
         ign_ports = lambda n: n % 2 == 0
 
         # filter OpenFlow rules
         self.of_hs["controller_rules"] = []
-        for rule in of_tf.rules:
+        for rule in self.of_tf.rules:
             for inports in rule["in_ports"]:
                 #if len(rule["out_ports"]) == 0 or ign_ports(inports) :
                 if ign_ports(inports):
@@ -157,24 +166,20 @@ class Comparator:
 
 # "temp", "results", "result" "_result", ... ?
     def decoupleRules(self, rules):
-        print "In decoupleRules... size=", len(rules)
+        print "In decoupleRules... original size=", len(rules)
         filtered_results = []
         results = [] # build up decorrelated rule-set
-        print "..."
-        sys.stdout.flush()
         for rule in rules:
-            print "Processing rule..."
             temp = [] # fragments of original rule that survive shadowing. really a *set*, not a list
             temp.append(rule)
+            print "starting new rule"
             for higher in results:
+                print "  higher... #results: ", len(results), " #temp: ", len(temp)
                 newfragments = [] # result of this stage of splitting
 
+
                 for i in range(len(temp)): # for every fragment generated as of last iteration, check for shadowing
-                    print "i = ", i, " in temp... len = ", len(temp)
-                    print "temp[0]['match'] = ", str(temp[0]['match'])
                     currentRule = temp[i]
-                    if(len(temp) > 0):
-                        print "mod temp[0]['match'] = ", str(temp[0]['match'])
                     intersectPart = wildcard_intersect(currentRule['match'], higher['match'])
 
                     # no intersect parts
@@ -195,7 +200,12 @@ class Comparator:
                         else:
                             t['shadowed'] = [higher]
                         # new decorrelated piece of header-space
-                        newfragments.append(t)
+                        if self.seekDupe(t, temp):
+                            print "omgomgomgomgomgomg"
+                        if self.seekDupe(t, results):
+                            print "omgomgomgomg"
+                        if t not in temp:
+                            newfragments.append(t)
                 # done looping: newfragments now holds the latest results
                 temp = newfragments
             # done splitting this rule
@@ -206,10 +216,16 @@ class Comparator:
             if not (len(r['out_ports']) == 0 or (65535 in r['out_ports'])):
                 filtered_results.append(r)
                 #print str(r['match'])
-
+        print "Exiting decoupleRules... decorrelated, filtered size=", len(filtered_results)
         return filtered_results
 
-
+    def seekDupe(self, t, temp):
+        for t2 in temp:
+            if t['match'] == t2['match']:
+                print "omgomgomgomgomgomg"
+                return True
+            else:
+                return False
 
     # Just for Test
     def TestDictGen(self, rules):
@@ -228,6 +244,24 @@ class Comparator:
                     d[ports] = [rule]
         return d
 
+    def new_compare(self, tf1, tf2):
+        tesths = headerspace(self.length)
+        tesths.add_hs(wildcard_create_bit_repeat(self.length, 3))
+        print tesths
+        # TODO: more than inport = 1
+        # TODO: what got dealt with in the old compare; e.g. removing CONTROLLER rules?
+        print "*****************"
+        tp1 = tf1.Tplus(tesths, 1)
+        print "*****************"
+        tp2 = tf2.Tplus(tesths, 1)
+        print "*****************"
+        print len(tp1)
+        print len(tp2)
+        print tp2
+
+        # TODO: Separate into buckets by components (1,2) (mod and outport)
+
+
 if __name__ == "__main__":
 
     c = Comparator()
@@ -235,15 +269,18 @@ if __name__ == "__main__":
     c.importOF('int','../examples/Exodus_toy_example/int/of-sat.txt')
     c.importIOS('../examples/Exodus_toy_example/int/')
 
-    print "===================OF-FWD-Rules (Before decorr):==========================="
+    '''print "===================OF-FWD-Rules (Before decorr):==========================="
     for key, value in c.of_hs.iteritems():
         print '----Bucket: %s -----' % key
         printRules(value)
+    '''
 
     print "Starting to decorrelate..."
 
-    c.decompleTF(c.ios_hs)
-    c.decompleTF(c.of_hs)
+    #c.decompleTF(c.ios_hs)
+    #c.decompleTF(c.of_hs)
+
+    c.new_compare(c.ios_tf, c.of_tf)
 
     sys.exit()
 
