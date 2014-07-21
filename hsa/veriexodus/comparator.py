@@ -160,32 +160,49 @@ class Comparator:
         print "In decoupleRules... size=", len(rules)
         filtered_results = []
         results = [] # build up decorrelated rule-set
-        print "..."
-        sys.stdout.flush()
+
+        ruleCount = 0
         for rule in rules:
-            print "Processing rule..."
+            print "Processing rule #", ruleCount
+            ruleCount += 1
+
+
             temp = [] # fragments of original rule that survive shadowing. really a *set*, not a list
             temp.append(rule)
+            print "Results had", len(results), " rule fragments to compute intersections for."
             for higher in results:
                 newfragments = [] # result of this stage of splitting
 
+                # same rule result? (mask, mod, and outport)
+                # then ignore; don't split under the same rule
+                # (possible side-effect: duplicate output for comparison)
+                if(higher['out_ports'] == rule['out_ports'] and
+                   wildcard_is_equal(higher['mask'],rule['mask']) and
+                   wildcard_is_equal(higher['rewrite'],rule['rewrite'])):
+                    #print "\nignoring higher rule; same result. keeping lower rule fully intact."
+                    #printRules([higher, rule])
+                    continue;
+
+                    # remove shadowed by etc. since that is ALREADY IN THE LIBRARY
+
                 for i in range(len(temp)): # for every fragment generated as of last iteration, check for shadowing
-                    print "i = ", i, " in temp... len = ", len(temp)
-                    print "temp[0]['match'] = ", str(temp[0]['match'])
+                    #print "i = ", i, " in temp... len = ", len(temp)
+                    #print "temp[0]['match'] = ", str(temp[0]['match'])
                     currentRule = temp[i]
-                    if(len(temp) > 0):
-                        print "mod temp[0]['match'] = ", str(temp[0]['match'])
-                    intersectPart = wildcard_intersect(currentRule['match'], higher['match'])
+                    #if(len(temp) > 0):
+                    #    print "mod temp[0]['match'] = ", str(temp[0]['match'])
+                    intersectParts = wildcard_intersect(currentRule['match'], higher['match'])
 
                     # no intersect parts
-                    if (len(intersectPart) == 0):
+                    if (len(intersectParts) == 0):
                         newfragments.append(currentRule) # no modifications to this element of temp
                         continue # move to next element of temp
 
-                    newWildcards = wildcard_diff(currentRule['match'], intersectPart)
+                    newWildcards = wildcard_diff(currentRule['match'], intersectParts)
                     for tw in newWildcards:
                         if tw is None:
                             continue
+
                         t = currentRule.copy()
                         t['match'] = tw
                         #for debugging use
@@ -196,10 +213,13 @@ class Comparator:
                             t['shadowed'] = [higher]
                         # new decorrelated piece of header-space
                         newfragments.append(t)
+
                 # done looping: newfragments now holds the latest results
                 temp = newfragments
+                #print "Finished a higher rule split; newfragments size = ", len(newfragments)
             # done splitting this rule
             results += temp
+            print "Finished splitting rule", ruleCount-1, "; temp size = ", len(temp)
 
         #remove drop and controller rules --> filtered_results
         for r in results:
