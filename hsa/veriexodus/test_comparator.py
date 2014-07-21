@@ -26,6 +26,9 @@ class Test(unittest.TestCase):
         w5 = wildcard_create_from_string("11111110")
         w6 = wildcard_create_from_string("11111101")
 
+        # pt1, 11111111 -> pt2, no mod
+        # pt1, 11111100 -> pt3, no mod
+        # pt1, 111111xx -> pt4, no mod
         tf.add_rewrite_rule(TF.create_standard_rule([1], w1, [2], \
                                                 w4, w4))
         tf.add_rewrite_rule(TF.create_standard_rule([1], w2, [3], \
@@ -35,6 +38,11 @@ class Test(unittest.TestCase):
         c = Comparator()
         d = c.TestDictGen(tf.rules)
         result = c.decoupleRules(d[1])
+        print "testDecoupleRules"
+        for r in result:
+            print r['match'], r['out_ports']
+
+        print "------"
         self.assertEqual(len(result), 4)
         self.assert_(Test.rule_is_equal(result[0], TF.create_standard_rule([1], w1, [2], w4, w4)))
         self.assert_(Test.rule_is_equal(result[1], TF.create_standard_rule([1], w2, [3], w4, w4)))
@@ -73,6 +81,8 @@ class Test(unittest.TestCase):
         w1 = wildcard_create_from_string("11111111")
         w2 = wildcard_create_from_string("1111111x")
         w3 = wildcard_create_from_string("11111110")
+
+        w3b = wildcard_create_from_string("1111111x")
         w4 = wildcard_create_from_string("xxxxxxxx")
 
         # 11111111 -> 2
@@ -94,9 +104,14 @@ class Test(unittest.TestCase):
 
         nfr1 = c.compare(d1, d2)
         nfr2 = c.compare(d2, d1)
+
+        # NOTE: use w3b for resulting match if using the "unshadowed by same-action" optimization
         self.assertEqual(len(nfr1), 0)
         self.assertEqual(len(nfr2), 1)
-        self.assert_(Test.rule_is_equal(nfr2[0], TF.create_standard_rule([1], w3, [2], w4, w4)))
+        if(c.opt_no_shadow_same_action):
+            self.assert_(Test.rule_is_equal(nfr2[0], TF.create_standard_rule([1], w3b, [2], w4, w4)))
+        else:
+            self.assert_(Test.rule_is_equal(nfr2[0], TF.create_standard_rule([1], w3, [2], w4, w4)))
 
     def testComparison_non_equal_2(self):
 
@@ -178,9 +193,9 @@ class Test(unittest.TestCase):
 
         tf.add_rewrite_rule(TF.create_standard_rule([1], w1, [2], \
                                                 allwc, allwc))
-        tf.add_rewrite_rule(TF.create_standard_rule([1], w2, [2], \
+        tf.add_rewrite_rule(TF.create_standard_rule([1], w2, [3], \
                                                 allwc, allwc))
-        tf.add_rewrite_rule(TF.create_standard_rule([1], w3, [2], \
+        tf.add_rewrite_rule(TF.create_standard_rule([1], w3, [4], \
                                                 allwc, allwc))
 
         # BUG:
@@ -191,21 +206,37 @@ class Test(unittest.TestCase):
         # R2 still overlaps R4.
         # R4 should be 00xxxxx1
 
+# another BUG:
+#11xxxxxx
+#01xxxxx1
+# ---
+#x0xxxxx1 // ^ orig rule (xxxxxxx1) minus these two TODO
+#10xxxxx1 <--- is totally shadowed by the prior rule; HS will sometimes include these after self_diff() called
+#00xxxxx1 <--- same.
+
+
         c = Comparator()
         d = c.TestDictGen(tf.rules)
         result = c.decoupleRules(d[1])
 
         # The affected by etc. fields lead to very expensive string construction
-        for r in result:
-            print r['match']
+        #print "results: "
+        #for r in result:
+        #    print r['match']
 
-        self.assertEqual(len(result), 4)
-        w4 = wildcard_create_from_string("00xxxxx1")
-        self.assert_(Test.rule_is_equal(result[3], TF.create_standard_rule([1], w4, [2], allwc, allwc)))
+        if(c.opt_no_shadow_same_action):
+            self.assertEqual(len(result), 3)
+            w4 = wildcard_create_from_string("x0xxxxx1")
+            self.assert_(Test.rule_is_equal(result[2], TF.create_standard_rule([1], w4, [4], allwc, allwc)))
+        else:
+            self.assertEqual(len(result), 4)
+            w4 = wildcard_create_from_string("00xxxxx1")
+            self.assert_(Test.rule_is_equal(result[3], TF.create_standard_rule([1], w4, [4], allwc, allwc)))
 
 
 if __name__ == "__main__":
     import sys;
-    sys.argv = ['', 'Test.testComparison_equal', 'Test.testComparison_non_equal_2', 'Test.testComparison_non_equal', \
-                'Test.testDecopuleRules', 'Test.testDecoupleRules_with_multiple_bits', 'Test.testDecorr_NoIntersect']
+    #sys.argv = ['', 'Test.testComparison_equal', 'Test.testComparison_non_equal_2', 'Test.testComparison_non_equal', \
+    #            'Test.testDecopuleRules', 'Test.testDecoupleRules_with_multiple_bits', 'Test.testDecorr_NoIntersect']
+    sys.argv = ['', 'Test.testDecorr_NoIntersect']
     unittest.main()
