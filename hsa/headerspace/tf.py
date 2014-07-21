@@ -801,13 +801,15 @@ class TF(object):
             elif rule['action'] == "rw":
                 vals = self.apply_rewrite_rule(rule, hs, port,\
                                                       applied_rules)
-                print "vals: ", vals
                 for v in vals:
+                    print "v: ", v[0], v[1]
                     if(v[1] == [65535]):
                         print "skipping ctrler"
                     else:
                         print "calling get_applies_hs_per_port ...", v
-                        result.append((self.get_applies_hs_per_port(rule), v[0], v[1]))
+                        applies_match = self.get_applies_hs_per_port(rule)
+                        print "AM: ", applies_match
+                        result.append((applies_match, v[0], v[1]))
 
             # forward rule
             elif rule['action'] == "fwd":

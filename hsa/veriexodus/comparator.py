@@ -244,6 +244,17 @@ class Comparator:
                     d[ports] = [rule]
         return d
 
+    # list of 3 tuples. need to separate into buckets by output/mod
+    def bucketize(self, tp):
+        result = {}
+        for tup in tp:
+            for pt in tup[2]:
+                key = (tup[1], pt);
+                if key not in result.keys():
+                    result[key] = []
+                result[key].append(tup[0])
+        return result
+
     def new_compare(self, tf1, tf2):
         tesths = headerspace(self.length)
         tesths.add_hs(wildcard_create_bit_repeat(self.length, 3))
@@ -257,9 +268,33 @@ class Comparator:
         print "*****************"
         print len(tp1)
         print len(tp2)
-        print tp2
-
+        print ""
+        for tp in tp2:
+            print "fragment: ", tp[0], "|", tp[1], "|", tp[2]
+        print ""
         # TODO: Separate into buckets by components (1,2) (mod and outport)
+        b1 = self.bucketize(tp1)
+        b2 = self.bucketize(tp2)
+        for k2 in b2.keys():
+            print ""
+            print "KEY: ", k2[0], k2[1]
+            for ruleaction in b2[k2]:
+                for inp in ruleaction.keys():
+                    print "VAL: ", inp, ruleaction[inp]
+
+        # TODO: for each inport...
+        # for each bucket...
+        for k2 in b2.keys():
+            bucket1 = b1.get(k2)
+            bucket2 = b2.get(k2)
+            if bucket1 == None:
+                print "none found for bucket: ", bucket2
+                continue;
+            # union of applies for key in b2 - union of applies for key in b1
+            # evaluate! is it empty? [could be slow...]
+
+
+
 
 
 if __name__ == "__main__":
