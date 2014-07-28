@@ -713,7 +713,7 @@ class TF(object):
         transfer function.
         '''
         result = []
-        for r in self.Tplus(hs, port):
+        for r in self.Tplus(hs, port, False):
             # Tplus returns
             result.append((r[1], r[2]))
         return result
@@ -724,7 +724,6 @@ class TF(object):
     def get_applies_hs_per_port(self, rule):
         shadowtopes = {}
         # two options: lazy and eager. "minus" is the eager; diff_hs would be the lazy.
-        # Is lazy good enough for us? Maybe.
         for aff in rule['affected_by']:
             #print "  shadow intersection: ", aff[1]
             #print "  on ports: ", aff[2]
@@ -755,7 +754,7 @@ class TF(object):
     def length():
         return length
 
-    def Tplus(self,hs,port):
+    def Tplus(self,hs,port,broaden_rewrite):
         '''
         modified version of former T. Now returns an extra tuple element that
         contains the pre-image of each image (i.e., the portion of the input
@@ -802,14 +801,20 @@ class TF(object):
                 vals = self.apply_rewrite_rule(rule, hs, port,\
                                                       applied_rules)
                 for v in vals:
-                    print "v: ", v[0], v[1]
+                    #print "v: ", v[0], v[1]
+
+                    broad_rewrite = wildcard_rewrite(wildcard_create_bit_repeat(self.length, 3), rule['mask'], rule['rewrite'])
+
                     if(v[1] == [65535]):
                         print "skipping ctrler"
                     else:
                         print "calling get_applies_hs_per_port ...", v
                         applies_match = self.get_applies_hs_per_port(rule)
                         print "AM: ", applies_match
-                        result.append((applies_match, v[0], v[1]))
+                        if(broaden_rewrite):
+                            result.append((applies_match, broad_rewrite[0], v[1]))
+                        else:
+                            result.append((applies_match, v[0], v[1]))
 
             # forward rule
             elif rule['action'] == "fwd":

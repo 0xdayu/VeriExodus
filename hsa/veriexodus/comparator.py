@@ -245,26 +245,35 @@ class Comparator:
         return d
 
     # list of 3 tuples. need to separate into buckets by output/mod
+    # The output HS will lazily include shadows; that's counterproductive for us.
+    # We just want the shape of what gets modified.
     def bucketize(self, tp):
         result = {}
         for tup in tp:
+            # Get a STRING that represents the modify bits, independent of shadowing
+            #noshadows = "\n".join(map(str, tup[1].hs_list))
+            broad_rewrite = str(tup[1])
             for pt in tup[2]:
-                key = (tup[1], pt);
+                key = (broad_rewrite, pt);
                 if key not in result.keys():
+                    print "key not in: ", key, result.keys()
                     result[key] = []
                 result[key].append(tup[0])
         return result
 
     def new_compare(self, tf1, tf2):
+
+        # If called from main, TF1 is IOS, TF2 is OF.
+
         tesths = headerspace(self.length)
         tesths.add_hs(wildcard_create_bit_repeat(self.length, 3))
         print tesths
         # TODO: more than inport = 1
         # TODO: what got dealt with in the old compare; e.g. removing CONTROLLER rules?
         print "*****************"
-        tp1 = tf1.Tplus(tesths, 1)
+        tp1 = tf1.Tplus(tesths, 1, True)
         print "*****************"
-        tp2 = tf2.Tplus(tesths, 1)
+        tp2 = tf2.Tplus(tesths, 1, True)
         print "*****************"
         print len(tp1)
         print len(tp2)
@@ -282,18 +291,48 @@ class Comparator:
                 for inp in ruleaction.keys():
                     print "VAL: ", inp, ruleaction[inp]
 
-        # TODO: for each inport...
-        # for each bucket...
-        for k2 in b2.keys():
-            bucket1 = b1.get(k2)
-            bucket2 = b2.get(k2)
+        # TODO: for each inport... (right now, inports are collapsed into one bucket with others)
+
+        # For each output profile
+        print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+        for k in b2.keys():
+            print "~~ Processing for output: ", k[0], k[1]
+            bucket1 = b1.get(k)
+            bucket2 = b2.get(k)
+
+            # Do this union before the None check so we can output helpfully
+            hs2 = headerspace(self.length)
+            for hspt in bucket2:
+                for inport in hspt.keys():
+                    # TODO: split ports out!
+                    hs2.add_hs(hspt[inport])
+
             if bucket1 == None:
-                print "none found for bucket: ", bucket2
+                print "\nnone found for bucket in TF1 for key ", k[0], k[1]
+                print "meaning the entire pre-image is in the diff: ", hs2
+                print "bucket 1 dict had key set:"
+                for k1 in b1.keys():
+                    print "key: ", k1[0], k1[1]
                 continue;
-            # union of applies for key in b2 - union of applies for key in b1
-            # evaluate! is it empty? [could be slow...]
 
+            # Union together all the pre-images for this output profile
+            # (Still lazy, i.e., has not yet subtracted out shadowed parts of pre-image)
+            hs1 = headerspace(self.length)
+            for hspt in bucket1:
+                for inport in hspt.keys():
+                    hs1.add_hs(hspt[inport])
 
+            # copy_minus does a copy of hs1, THEN does an eager subtraction
+            # If we experience performance problems, it will be this call:
+
+            print "  Computing difference between:"
+            print "    ", hs1
+            print "    ", hs2
+            print ""
+            diff = hs1.copy_minus(hs2)
+
+            print "\nresult for bucket: ", k[0], k[1]
+            print diff
 
 
 

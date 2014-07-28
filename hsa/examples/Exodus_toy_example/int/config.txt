@@ -5,17 +5,17 @@ interface in_dmz
 ip address 10.1.1.1 255.255.255.0
 ip access-group 110 in
 ! EXODUS HSA: added access group
-!ip nat outside
+ip nat outside
 !
 interface in_lan
 ip address 192.168.1.1 255.255.0.0
 ip access-group 102 in
-!ip nat inside
+ip nat inside
 !
-!access-list 102 deny ip 192.168.4.1 0.0.0.255 host 10.1.1.3
-!access-list 102 permit tcp any host 10.1.1.3 eq 25
-!access-list 102 permit tcp any any eq 80
-!access-list 102 permit tcp any any eq 22
+access-list 102 deny ip 192.168.4.1 0.0.0.255 host 10.1.1.3
+access-list 102 permit tcp any host 10.1.1.3 eq 25
+access-list 102 permit tcp any any eq 80
+access-list 102 permit tcp any any eq 22
 ! EXODUS HSA: saturated state has no NAT, so no traffic can get through
 ! (kludge; would need to add NAT table support to HSA otherwise...)
 access-list 102 deny any
@@ -29,6 +29,6 @@ access-list 110 deny any
 !
 ip route 0.0.0.0 0.0.0.0 10.1.1.2
 !
-!access-list 1 permit 192.168.1.1 0.0.255.255
+access-list 1 permit 192.168.1.1 0.0.255.255
 ! // need to give the end command
 end
