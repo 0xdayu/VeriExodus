@@ -36,6 +36,17 @@ class wildcard(object):
         else:
             return 0
 
+    # These three added by Tim
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return wildcard_is_equal(self, other)
+        else:
+            return False
+    def __ne__(self, other):
+        return (not self.__eq__(other))
+    def __hash__(self):
+        return hash(str(self))
+
     def __copy__(self):
         newone = type(self)(self.length,self.pointer)
         newone.__dict__.update(self.__dict__)

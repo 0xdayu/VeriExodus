@@ -42,12 +42,16 @@ class Test(unittest.TestCase):
         for r in result:
             print r['match'], r['out_ports']
 
-        print "------"
+# Order of final 2 rules may vary
+#D253 [4]
+#D254 [4]
+
+        print "~~~~~"
         self.assertEqual(len(result), 4)
         self.assert_(Test.rule_is_equal(result[0], TF.create_standard_rule([1], w1, [2], w4, w4)))
         self.assert_(Test.rule_is_equal(result[1], TF.create_standard_rule([1], w2, [3], w4, w4)))
-        self.assert_(Test.rule_is_equal(result[2], TF.create_standard_rule([1], w5, [4], w4, w4)))
-        self.assert_(Test.rule_is_equal(result[3], TF.create_standard_rule([1], w6, [4], w4, w4)))
+        self.assert_(Test.rule_is_equal(result[2], TF.create_standard_rule([1], w6, [4], w4, w4)))
+        self.assert_(Test.rule_is_equal(result[3], TF.create_standard_rule([1], w5, [4], w4, w4)))
 
     def testDecoupleRules_with_multiple_bits(self):
         tf = TF(1)
@@ -206,13 +210,10 @@ class Test(unittest.TestCase):
         # R2 still overlaps R4.
         # R4 should be 00xxxxx1
 
-# another BUG:
 #11xxxxxx
 #01xxxxx1
-# ---
-#x0xxxxx1 // ^ orig rule (xxxxxxx1) minus these two TODO
-#10xxxxx1 <--- is totally shadowed by the prior rule; HS will sometimes include these after self_diff() called
-#00xxxxx1 <--- same.
+#x0xxxxx1
+#00xxxxx1
 
 
         c = Comparator()
@@ -220,9 +221,9 @@ class Test(unittest.TestCase):
         result = c.decoupleRules(d[1])
 
         # The affected by etc. fields lead to very expensive string construction
-        #print "results: "
-        #for r in result:
-        #    print r['match']
+        print "results: "
+        for r in result:
+            print r['match']
 
         if(c.opt_no_shadow_same_action):
             self.assertEqual(len(result), 3)
@@ -236,7 +237,7 @@ class Test(unittest.TestCase):
 
 if __name__ == "__main__":
     import sys;
-    #sys.argv = ['', 'Test.testComparison_equal', 'Test.testComparison_non_equal_2', 'Test.testComparison_non_equal', \
-    #            'Test.testDecopuleRules', 'Test.testDecoupleRules_with_multiple_bits', 'Test.testDecorr_NoIntersect']
-    sys.argv = ['', 'Test.testDecorr_NoIntersect']
+    sys.argv = ['', 'Test.testComparison_equal', 'Test.testComparison_non_equal_2', 'Test.testComparison_non_equal', \
+                'Test.testDecopuleRules', 'Test.testDecoupleRules_with_multiple_bits', 'Test.testDecorr_NoIntersect']
+    #sys.argv = ['', 'Test.testDecorr_NoIntersect']
     unittest.main()

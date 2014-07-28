@@ -14,6 +14,9 @@ class Comparator:
         # adjust this to turn the optimization on and off
         self.opt_no_shadow_same_action = True
 
+        # VERY expensive optimization
+        self.opt_minimize_shadowing_per_cycle = True
+
     def decompleTF(self, tf):
         for key, value in tf.iteritems():
             if key == "controller_rules":
@@ -157,14 +160,20 @@ class Comparator:
                     else:
                         self.of_hs[inports] = [rule]'''
 
+    def numWildcardBits(self, wc):
+        # Kludgey speed-hack to avoid figuring out the right bit-shifting for wildcards
+        strwc = str(wc)
+        return strwc.count("x")
+
     def decoupleRules(self, rules):
-        print "In decoupleRules... size=", len(rules)
+        print "\n\nIn decoupleRules... size=", len(rules)
         filtered_results = []
         results = [] # build up decorrelated rule-set
-        higher_rules = []
+        higher_rules = [] # needs to be a list (see below)
         ruleCount = 0
         for rule in rules:
             print "Processing rule #", ruleCount
+            #print "Rule match is: \n", parseWildcard(rule['match'])
             ruleCount += 1
 
             # Don't do anything to the first rule
@@ -173,11 +182,25 @@ class Comparator:
                 higher_rules.append(rule)
                 continue;
 
-            intersectionWCs = []
-            # Use the original higher-priority rules, NOT results (avoid early exponential factor)
+            # HEURISTIC: This gives a *significant* reduction in space-usage
+            # Split by largest wildcards first. (Order doesn't matter here, only *the collective shadow* of prior rules)
+            # TODO: could be smarter to try to max the *shared* wildcards? (?)
+            higher_rules = sorted(higher_rules, key=(lambda r : self.numWildcardBits(r['match'])), reverse=True)
+
+            # INITIALIZE map to hold unshadowed fragments
+            # Separate multi-in rules into single-in rules.
+            # This imposes a slight linear-by-max-num-of-inports blowup, but most rules have low inport numbers
+            ruleFragmentHSForInports = {}
+            for inpt in rule['in_ports']:
+                ruleFragmentHSForInports[inpt] = headerspace(rule['match'].length)
+                ruleFragmentHSForInports[inpt].add_hs(rule['match'])
+
+            # Use the original higher-priority rules, NOT their unshadowed fragments (avoid early exponential factor)
             priorCount = 0
             for higher in higher_rules:
-                print "Processing higher rule #", priorCount
+                print "  Processing higher rule #", priorCount, "of",len(higher_rules)
+                #print "  Higher-rule match is: \n", parseWildcard(higher['match'])
+                #print "  Number of wildcard bits: ", self.numWildcardBits(higher['match'])
                 priorCount += 1
 
                 # same rule result? (mask, mod, and outport)
@@ -187,75 +210,56 @@ class Comparator:
                    higher['out_ports'] == rule['out_ports'] and
                    wildcard_is_equal(higher['mask'],rule['mask']) and
                    wildcard_is_equal(higher['rewrite'],rule['rewrite'])):
-                    print "ignoring higher rule; same result, so not including it in the intersection to subtract"
+                    #print "ignoring higher rule; same result, so not including it in the intersection to subtract"
                     #printRules([higher, rule])
                     continue;
 
-                # TODO: remove shadowed by etc. since that is ALREADY IN THE LIBRARY
-                # (under different field names. see 'affected_by')
+                ####################
+                # Compute the new set, shadowed by this higher-rule
+                for inpt in higher['in_ports']:
+                    # Anything to check?
+                    if ruleFragmentHSForInports[inpt].copy_intersect(higher['match']).is_empty():
+                        continue;
 
-                # Get intersection w/ higher rule and add to list
-                print "intersecting with ", higher['match']
-                intersectParts = wildcard_intersect(rule['match'], higher['match'])
-                #print "intersecting ", rule['match'], higher['match']
-                print "intersect parts: ", intersectParts, intersectParts.length
-                if(intersectParts.length > 0):
-                    # don't blindly append. is this intersectParts *fully* shadowed by anything else in intersectWC?
-                    # TODO: what if the new thing shadows the old thing?
-                    shadowed = False
-                    for otherint in intersectionWCs:
-                        if(wildcard_is_subset(intersectParts, otherint)):
-                            print "[][][][][][] intersect parts is shadowed; ignoring it"
-                            shadowed = True
-                            break;
-                    if(not shadowed):
-                        intersectionWCs.append(intersectParts)
-                        # NOT wildcard_or; that will bitwise-or the wildcards
+                    ruleFragmentHSForInports[inpt].diff_hs(higher['match'])
+                    ruleFragmentHSForInports[inpt].self_diff() # All positive union, no lazy expressions
 
+                    # Default HSA wildcards have reference equality
+                    #print "*** ", higher['match'] == higher['match']
+                    #print "*** ", higher['match'] == wildcard_copy(higher['match'])
+                    #print "*** ", higher['match'] == rule['match']
+                    # We want both to be True (so we can use sets) but not the final one
+
+                    # HS library may still give fully-shadowed wildcards in the union, here.
+                    if(self.opt_minimize_shadowing_per_cycle):
+                        print "Number of fragments prior to calling remove shadows list: ", len(ruleFragmentHSForInports[inpt].hs_list)
+                        ruleFragmentHSForInports[inpt].remove_shadows_list()
+
+                    print "~~~ Port: ", inpt, "; Number of fragments ", len(ruleFragmentHSForInports[inpt].hs_list)
+                ####################
+
+            # Include this rule in splitting for later rules
             higher_rules.append(rule)
 
-            # No intersections. still need to save the (fully intact) rule
-            if(len(intersectionWCs) == 0):
-                results.append(rule)
-                continue
-
-            #wildcard_or(intersectionWC,intersectParts)
-            #newWildcards = wildcard_diff(rule['match'], intersectionWCs)
-            hsRuleMatch = headerspace(rule['match'].length)
-            # copy the WC, prevent reference overlap
-            hsRuleMatch.add_hs(wildcard_copy(rule['match']))
-            # *lazy* diff
-            hsRuleMatch.diff_hs_list(intersectionWCs)
-            # resolve lazy diff (EXPENSIVE!)
-            print hsRuleMatch
-            hsRuleMatch.self_diff()
-            # ASSUMPTION: at this point, hsRuleMatch.hs_diff should contain only empty-lists
-            # Given that, it is safe to take the union of hsRuleMatch.hs_list
-            print "new match size", len(hsRuleMatch.hs_list)
-
             newFragments = []
-            for tw in hsRuleMatch.hs_list:
-                if tw is None:
-                    continue
+            countShadowed = 0
+            for inpt in ruleFragmentHSForInports.keys():
+                # Unique only
+                for tw in set(ruleFragmentHSForInports[inpt].hs_list):
+                    t = rule.copy()
+                    t['match'] = tw
+                    t['in_port'] = inpt
+                    newFragments.append(t)
 
-                # HS library may still give fully-shadowed wildcards in the union, here.
-                # Check that a new fragment we added doesn't overshadow this one:
-                shadowed = False
-                for arule in newFragments:
-                    if wildcard_is_subset(tw, arule['match']):
-                        shadowed = True
-                        #print "shadowed in diff'd union. ignoring"
-                        break
-                if(shadowed):
-                    continue
-
-                t = rule.copy()
-                t['match'] = tw
-                newFragments.append(t)
+                    ## TODO: use a set, not a list
 
             # done looping
-            results.extend(newFragments)
             print "Finished splitting rule", ruleCount-1, "; newFragments size = ", len(newFragments)
+            print "Shadowed = ", countShadowed
+
+            print "size of results pre: ", len(results)
+            results.extend(newFragments)
+            print "size of results post: ", len(results)
 
 
         print "pre-Filtered results size: ", len(results)
@@ -304,7 +308,6 @@ if __name__ == "__main__":
     c.decompleTF(c.ios_hs)
     c.decompleTF(c.of_hs)
 
-    sys.exit()
 
     print "Done decorrelating..."
 
@@ -316,11 +319,11 @@ if __name__ == "__main__":
     '''
 
 
-    print "===================OF-FWD-Rules (post-decorr):==========================="
+    '''print "===================OF-FWD-Rules (post-decorr):==========================="
     for key, value in c.of_hs.iteritems():
         print '----Bucket: %s -----' % key
         printRules(value)
-
+'''
 
 
 
@@ -328,8 +331,10 @@ if __name__ == "__main__":
     _nfr = c.compare(c.of_hs, c.ios_hs)
 
     print '--------Not Found in TF1 (present in IOS; not present in OF):------'
+    print " #rules: ", len(nfr)
     printRules(nfr)
 
 
     print '--------Not Found in TF2 (present in OF; not present in IOS):------'
+    print " #rules: ", len(_nfr)
     printRules(_nfr)

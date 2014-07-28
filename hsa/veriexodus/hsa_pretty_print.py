@@ -65,6 +65,7 @@ def parseWildcard(w):
     format["dl_src_pos"] = 16
     format["dl_dst_pos"] = 22
     format["dl_proto_pos"] = 28
+
     format["vlan_len"] = 2
     format["ip_src_len"] = 4
     format["ip_dst_len"] = 4
@@ -75,8 +76,9 @@ def parseWildcard(w):
     format["dl_src_len"] = 6
     format["dl_dst_len"] = 6
     format["dl_proto_len"] = 2
+
     format["length"] = 30
 
     fields = ["vlan","dl_src","dl_dst","dl_proto","ip_src","ip_dst","ip_proto","transport_src",\
-      "transport_dst"]
+      "transport_dst", "transport_ctrl"]
     return wc_header_to_parsed_string(format, fields, w)

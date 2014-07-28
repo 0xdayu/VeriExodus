@@ -331,6 +331,31 @@ class headerspace(object):
         self.hs_list = new_hs_list
         self.hs_diff = new_hs_diff
 
+    # Sometimes calling self_diff() produces wildcards that fully shadow others
+    # Minimize the set. DO NOT USE EXCEPT AFTER CALLING SELF_DIFF()
+    def remove_shadows_list(self):
+        new_hs_list = []
+        for wc in self.hs_list:
+            shadowed = False
+            for prevwc in new_hs_list: # everything prior
+                if wildcard_is_subset(wc, prevwc):
+                    shadowed = True
+                    break
+            if(not shadowed):
+                new_hs_list.append(wc)
+
+        self.hs_list = new_hs_list
+
+                    #    if wildcard_is_equal(tw, arule['match']):
+                    #        print "equalequalequal", (tw==arule['match'])
+                    #    if wildcard_is_subset(tw, arule['match']):
+                    #        shadowed = True
+                    #        print "shadowed in diff'd union. ignoring"
+                    #        break
+                    #if(shadowed):
+                    #    countShadowed += 1
+                    #    continue
+
 
     def add_lazy_tf_rules(self, ntf, rule_ids, port):
         '''
