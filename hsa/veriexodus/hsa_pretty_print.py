@@ -29,6 +29,12 @@ def printRuleToFile(afile, rule):
     afile.write("\n")
     afile.write("--------------------\n")
 
+    # debug
+    if 'orig_rule_match' in rule.keys():
+        r = rule['orig_rule_match']
+        afile.write('---------Original Match -----------')
+        afile.write(parseWildcard(r))
+        afile.write('----------------------------')
 
     #for debugging
     '''if 'generated' in rule.keys():

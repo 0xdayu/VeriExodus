@@ -249,6 +249,7 @@ class Comparator:
                     t = rule.copy()
                     t['match'] = tw
                     t['in_port'] = inpt
+                    t['orig_rule_match'] = rule['match']
                     newFragments.append(t)
 
                     ## TODO: use a set, not a list
