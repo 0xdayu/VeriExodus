@@ -11,6 +11,10 @@ class Comparator:
         # key, value -> inports number, [rules]
         self.ios_hs = {}
         self.of_hs = {}
+
+        # length of wildcards.
+        self.length = None
+
         # adjust this to turn the optimization on and off
         self.opt_no_shadow_same_action = True
 
@@ -101,6 +105,8 @@ class Comparator:
         table_folder + 'route.txt', \
         table_folder + 'arp_table.txt')
         ios_tf = ios.generate_transfer_function()
+        if(self.length == None):
+            self.length = ios_tf.length
 
         #port_map = {1:3, 2:1}
         #ios_ports = lambda n: port_map[n]
@@ -127,6 +133,8 @@ class Comparator:
     def importOF(self, route_name, dump_file):
 
         of_tf = generate_of_tfs(route_name, dump_file)
+        if(self.length == None):
+            self.length = of_tf.length
 
         ign_ports = lambda n: n % 2 == 0
 
@@ -273,7 +281,16 @@ class Comparator:
         print "Filtered results size: ", len(filtered_results)
         return filtered_results
 
-
+    # Filter the results; exclude certain expected pieces of rule space
+    def isnt_subset_of_exclude(self, r, exclusions):
+        for rex in exclusions:
+            if (wildcard_is_subset(r['match'], rex['match']) and
+                wildcard_is_subset(r['mask'], rex['mask']) and
+                wildcard_is_subset(r['rewrite'], rex['rewrite']) and
+                all(pt in rex['in_ports'] for pt in r['in_ports']) and
+                all(pt in rex['out_ports'] for pt in r['out_ports'])):
+                return False
+        return True
 
     # Just for Test
     def TestDictGen(self, rules):
@@ -304,11 +321,41 @@ if __name__ == "__main__":
         print '----Bucket: %s -----' % key
         printRules(value)
 
-    print "Starting to decorrelate..."
 
+    wcall = wildcard_create_bit_repeat(c.length,3)
+
+    # TODO not all match
+    # Will need 8 separate rules to do !(nwSrc in 192.168.0.0/16)
+
+    print pkt_format()
+
+    wc_dlDstcafe0101 = wildcard_copy(wcall)
+    set_header_field(pkt_format(), wc_dlDstcafe0101, 'dl_dst', mac_to_int('ca:fe:00:01:00:01'), 0)
+    print wc_dlDstcafe0101
+
+    exclusions = []
+
+    ##############################################
+    # EXCLUSION NUMBER 1: port 1 to port 3, dlDst = cafe0101, nwSrc NOT IN 192.168.0.0/16
+    # 192 168 = 11000000 10101000
+    # 1 gives 0; 2 gives 1
+    cNOT_192168 = [1,1,2,2,2,2,2,2,1,2,1,2,1,2,2,2]
+    for i in range(16):
+        wc = wildcard_copy(wc_dlDstcafe0101)
+        # i_th bit in nwSrc is fixed to negate 192.168.0.0/16; others are wildcard
+        # positions are reversed
+        bytec = 3 - (i // 8)
+        bitc = 7 - (i % 8)
+        wc[(pkt_format()['ip_src_pos']+bytec, bitc)] = cNOT_192168[i]
+        nomatch_rule = {'match':wc, 'mask':wcall, 'rewrite':wcall, 'in_ports':[1], 'out_ports':[3]}
+        print i, bytec, bitc
+        print parseWildcard(wc)
+        exclusions.append(nomatch_rule)
+    ##############################################
+
+    # Remove shadowing
     c.decompleTF(c.ios_hs)
     c.decompleTF(c.of_hs)
-
 
     print "Done decorrelating..."
 
@@ -327,15 +374,20 @@ if __name__ == "__main__":
 '''
 
 
+    not_in_of = c.compare(c.ios_hs, c.of_hs)
+    not_in_ios = c.compare(c.of_hs, c.ios_hs)
 
-    nfr = c.compare(c.ios_hs, c.of_hs)
-    _nfr = c.compare(c.of_hs, c.ios_hs)
+    # Apply filter for expected differences
+    # TODO: move this into a 3rd input file to be general
+    not_in_ios_filtered = filter(lambda r: c.isnt_subset_of_exclude(r,exclusions), not_in_ios)
+
+
 
     print '--------Not Found in TF1 (present in IOS; not present in OF):------'
-    print " #rules: ", len(nfr)
-    printRules(nfr)
-
+    print " #rules: ", len(not_in_of)
+    printRules(not_in_of)
 
     print '--------Not Found in TF2 (present in OF; not present in IOS):------'
-    print " #rules: ", len(_nfr)
-    printRules(_nfr)
+    print " #rules: ", len(not_in_ios_filtered)
+    print " excluded by filter: ", len(not_in_ios) - len(not_in_ios_filtered)
+    printRules(not_in_ios_filtered)

@@ -56,35 +56,35 @@ def printRuleToFile(afile, rule):
     afile.write('********************************************************\n')
 
 
+def pkt_format():
+    pkt_format = {}
+    pkt_format["vlan_pos"] = 0
+    pkt_format["ip_src_pos"] = 2
+    pkt_format["ip_dst_pos"] = 6
+    pkt_format["ip_proto_pos"] = 10
+    pkt_format["transport_src_pos"] = 11
+    pkt_format["transport_dst_pos"] = 13
+    pkt_format["transport_ctrl_pos"] = 15
+    pkt_format["dl_src_pos"] = 16
+    pkt_format["dl_dst_pos"] = 22
+    pkt_format["dl_proto_pos"] = 28
+    #
+    pkt_format["vlan_len"] = 2
+    pkt_format["ip_src_len"] = 4
+    pkt_format["ip_dst_len"] = 4
+    pkt_format["ip_proto_len"] = 1
+    pkt_format["transport_src_len"] = 2
+    pkt_format["transport_dst_len"] = 2
+    pkt_format["transport_ctrl_len"] = 1
+    pkt_format["dl_src_len"] = 6
+    pkt_format["dl_dst_len"] = 6
+    pkt_format["dl_proto_len"] = 2
+    #
+    pkt_format["length"] = 30
+    return pkt_format
 
 
 def parseWildcard(w):
-
-    format = {}
-    format["vlan_pos"] = 0
-    format["ip_src_pos"] = 2
-    format["ip_dst_pos"] = 6
-    format["ip_proto_pos"] = 10
-    format["transport_src_pos"] = 11
-    format["transport_dst_pos"] = 13
-    format["transport_ctrl_pos"] = 15
-    format["dl_src_pos"] = 16
-    format["dl_dst_pos"] = 22
-    format["dl_proto_pos"] = 28
-
-    format["vlan_len"] = 2
-    format["ip_src_len"] = 4
-    format["ip_dst_len"] = 4
-    format["ip_proto_len"] = 1
-    format["transport_src_len"] = 2
-    format["transport_dst_len"] = 2
-    format["transport_ctrl_len"] = 1
-    format["dl_src_len"] = 6
-    format["dl_dst_len"] = 6
-    format["dl_proto_len"] = 2
-
-    format["length"] = 30
-
     fields = ["vlan","dl_src","dl_dst","dl_proto","ip_src","ip_dst","ip_proto","transport_src",\
       "transport_dst", "transport_ctrl"]
-    return wc_header_to_parsed_string(format, fields, w)
+    return wc_header_to_parsed_string(pkt_format(), fields, w)
